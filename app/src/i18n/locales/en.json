@@ -1,0 +1,61 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "errorGeneric": "Something went wrong. Please try again."
+  },
+  "nav": {
+    "pa": "PA",
+    "board": "Business Board",
+    "settings": "Settings"
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Log in to pick up right where you left off.",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "submit": "Log in",
+      "switchPrompt": "New here?",
+      "switchAction": "Create an account"
+    },
+    "signup": {
+      "title": "Let's get you set up",
+      "subtitle": "It only takes a minute.",
+      "nameLabel": "Name",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "passwordHint": "At least 8 characters",
+      "submit": "Create account",
+      "switchPrompt": "Already have an account?",
+      "switchAction": "Log in"
+    }
+  },
+  "pa": {
+    "placeholderTitle": "Hi, I'm your assistant",
+    "placeholderBody": "This is where our conversation will live — text or voice, on the app or WhatsApp. Reminders, email, calendar, research, and reaching out to people for you are all coming soon.",
+    "demoCardTitle": "This needs your OK",
+    "demoCardBody": "Here's a preview of how I'll ask before I do anything on your behalf — like sending an email or booking something.",
+    "demoCardApprove": "Looks good",
+    "demoCardDismiss": "Not now"
+  },
+  "board": {
+    "placeholderTitle": "Your Business Board",
+    "placeholderBody": "Describe your business in a sentence and I'll build a board around it — clients, the fields that matter, and follow-up reminders. That's coming soon.",
+    "demoCardTitle": "Follow-up suggestion",
+    "demoCardBody": "Dana hasn't booked in 3 weeks — want me to flag this once follow-ups are live?",
+    "demoCardApprove": "Sounds good",
+    "demoCardDismiss": "Dismiss"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageEnglish": "English",
+    "languageHebrew": "עברית",
+    "restartNotice": "The app will restart to apply the new layout direction.",
+    "account": "Account",
+    "logout": "Log out"
+  }
+}

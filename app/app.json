@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "PA & Board",
+    "slug": "pa-and-board-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "paandboard",
+    "splash": {
+      "backgroundColor": "#FBF3EA"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.paandboard.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF3EA"
+      },
+      "package": "com.paandboard.app"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": ["expo-secure-store", "expo-localization"],
+    "extra": {
+      "eas": {}
+    }
+  }
+}
