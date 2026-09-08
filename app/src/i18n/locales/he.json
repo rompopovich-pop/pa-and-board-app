@@ -1,0 +1,61 @@
+{
+  "common": {
+    "cancel": "ביטול",
+    "confirm": "אישור",
+    "loading": "טוען…",
+    "retry": "נסה שוב",
+    "errorGeneric": "משהו השתבש. נסו שוב."
+  },
+  "nav": {
+    "pa": "עוזר אישי",
+    "board": "לוח עסקי",
+    "settings": "הגדרות"
+  },
+  "auth": {
+    "login": {
+      "title": "ברוכים השבים",
+      "subtitle": "התחברו כדי להמשיך בדיוק מאיפה שעצרתם.",
+      "emailLabel": "אימייל",
+      "passwordLabel": "סיסמה",
+      "submit": "התחברות",
+      "switchPrompt": "חדשים כאן?",
+      "switchAction": "יצירת חשבון"
+    },
+    "signup": {
+      "title": "בואו נגדיר לכם חשבון",
+      "subtitle": "זה ייקח רק דקה.",
+      "nameLabel": "שם",
+      "emailLabel": "אימייל",
+      "passwordLabel": "סיסמה",
+      "passwordHint": "לפחות 8 תווים",
+      "submit": "יצירת חשבון",
+      "switchPrompt": "כבר יש לכם חשבון?",
+      "switchAction": "התחברות"
+    }
+  },
+  "pa": {
+    "placeholderTitle": "היי, אני העוזר האישי שלך",
+    "placeholderBody": "כאן תתנהל השיחה בינינו — בטקסט או בקול, באפליקציה או בוואטסאפ. תזכורות, אימיילים, יומן, מחקר ופנייה לאנשים בשמך — כל זה בקרוב.",
+    "demoCardTitle": "זה דורש את אישורך",
+    "demoCardBody": "כך אבקש את אישורך לפני שאני עושה משהו בשמך — כמו שליחת אימייל או הזמנה.",
+    "demoCardApprove": "מעולה",
+    "demoCardDismiss": "לא עכשיו"
+  },
+  "board": {
+    "placeholderTitle": "הלוח העסקי שלך",
+    "placeholderBody": "תארו את העסק שלכם במשפט אחד ואבנה סביבו לוח — לקוחות, השדות הרלוונטיים ותזכורות מעקב. בקרוב.",
+    "demoCardTitle": "הצעת מעקב",
+    "demoCardBody": "דנה לא קבעה פגישה כבר 3 שבועות — לסמן את זה כשתכונת המעקב תהיה זמינה?",
+    "demoCardApprove": "בסדר גמור",
+    "demoCardDismiss": "התעלמות"
+  },
+  "settings": {
+    "title": "הגדרות",
+    "language": "שפה",
+    "languageEnglish": "English",
+    "languageHebrew": "עברית",
+    "restartNotice": "האפליקציה תופעל מחדש כדי להחיל את כיוון הפריסה החדש.",
+    "account": "חשבון",
+    "logout": "התנתקות"
+  }
+}
