@@ -24,9 +24,11 @@ const tokenStore = Platform.OS === "web" ? webTokenStore : SecureStore;
 // in app/.env for a physical device (localhost won't reach your dev machine).
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
+// A conversation turn can involve transcription, several tool calls and
+// speech synthesis, so the timeout is generous.
 export const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 60000,
 });
 
 apiClient.interceptors.request.use(async (requestConfig) => {

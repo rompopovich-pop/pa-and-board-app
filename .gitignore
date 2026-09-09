@@ -15,6 +15,9 @@ app/android/
 # Backend build output
 backend/dist/
 
+# Uploaded / generated audio (voice notes, TTS replies)
+backend/storage/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

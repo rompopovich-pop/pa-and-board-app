@@ -3,6 +3,7 @@ import cors from "cors";
 import { config } from "./config";
 import authRouter from "./routes/auth";
 import paRouter from "./routes/pa";
+import oauthRouter from "./routes/oauth";
 import whatsappRouter from "./routes/whatsapp";
 import { errorHandler } from "./middleware/errorHandler";
 import { startReminderScheduler } from "./services/scheduler";
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRouter);
 app.use("/pa", paRouter);
+app.use("/oauth", oauthRouter);
 app.use("/webhooks/whatsapp", whatsappRouter);
 
 app.use(errorHandler);

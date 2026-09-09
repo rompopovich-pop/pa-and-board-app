@@ -25,8 +25,10 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  messages  Message[]
-  reminders Reminder[]
+  messages         Message[]
+  reminders        Reminder[]
+  oauthConnections OAuthConnection[]
+  emailDrafts      EmailDraft[]
 
   @@map("users")
 }
@@ -41,20 +43,77 @@ enum MessageRole {
   assistant
 }
 
+enum MessageModality {
+  text
+  voice
+}
+
 // The unified conversation log: one user, one conversation, regardless of
 // which channel (app or WhatsApp) they're using right now - pa-whatsapp-spec.md
-// section 3, "Key principle".
+// section 3, "Key principle". Voice messages store their transcript in
+// `content` (the engine only ever thinks in text - spec section 5) plus the
+// audio file path. `metadata` carries structured UI state such as a pending
+// email draft the app renders as a confirmation card.
 model Message {
-  id        String         @id @default(uuid())
-  userId    String         @map("user_id")
-  user      User           @relation(fields: [userId], references: [id])
+  id        String          @id @default(uuid())
+  userId    String          @map("user_id")
+  user      User            @relation(fields: [userId], references: [id])
   role      MessageRole
   channel   MessageChannel
+  modality  MessageModality @default(text)
   content   String
-  createdAt DateTime       @default(now()) @map("created_at")
+  audioPath String?         @map("audio_path")
+  metadata  Json?
+  createdAt DateTime        @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
   @@map("messages")
+}
+
+// pa-whatsapp-spec.md section 6/8: OAuth tokens per provider. One "google"
+// connection covers both Gmail and Calendar. Tokens are stored as-is for v1;
+// encrypting them at rest is an ops follow-up (spec section 10, data retention).
+model OAuthConnection {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id])
+  provider     String
+  accountEmail String?   @map("account_email")
+  accessToken  String    @map("access_token")
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at")
+  scopes       String[]
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, provider])
+  @@map("oauth_connections")
+}
+
+enum EmailDraftStatus {
+  pending
+  sent
+  discarded
+}
+
+// An email the PA drafted but did not send - the "draft and ask" half of the
+// auto-send-vs-draft rule (spec section 6). Mirrors a real Gmail draft so the
+// user also sees it in Gmail; sending goes through that draft.
+model EmailDraft {
+  id           String           @id @default(uuid())
+  userId       String           @map("user_id")
+  user         User             @relation(fields: [userId], references: [id])
+  gmailDraftId String           @map("gmail_draft_id")
+  to           String
+  subject      String
+  body         String
+  threadId     String?          @map("thread_id")
+  status       EmailDraftStatus @default(pending)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  @@index([userId, status])
+  @@map("email_drafts")
 }
 
 enum ReminderStatus {

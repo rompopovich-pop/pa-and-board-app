@@ -35,9 +35,23 @@
   },
   "pa": {
     "placeholderTitle": "Hi, I'm your assistant",
-    "placeholderBody": "Say hi to get started. I can chat and manage reminders for now — email, calendar, research, and reaching out to people for you are coming soon. Message me here or on WhatsApp, it's the same conversation either way.",
+    "placeholderBody": "Say hi to get started — type, or tap the mic and just talk. I can chat, manage reminders, and once you connect Google in Settings, handle your email and calendar too. Research and reaching out to people for you are coming soon. Message me here or on WhatsApp, it's the same conversation either way.",
     "inputPlaceholder": "Message your assistant…",
-    "send": "Send"
+    "send": "Send",
+    "record": "Record a voice note",
+    "recordHint": "Recording… tap the arrow to send",
+    "stopRecording": "Stop and send",
+    "micPermission": "Microphone access is needed for voice notes.",
+    "voiceNote": "Voice note",
+    "playVoice": "Play voice reply",
+    "stopVoice": "Stop",
+    "draftTitle": "Email draft — needs your OK",
+    "draftTo": "To",
+    "draftSubject": "Subject",
+    "draftSend": "Send",
+    "draftDiscard": "Discard",
+    "draftSent": "Sent",
+    "draftDiscarded": "Discarded"
   },
   "board": {
     "placeholderTitle": "Your Business Board",
@@ -59,6 +73,11 @@
     "whatsappExplainer": "Link your WhatsApp number to chat with me there too — it's the same conversation either way.",
     "whatsappPhoneLabel": "Your WhatsApp number",
     "whatsappSave": "Save number",
-    "whatsappOpen": "Chat on WhatsApp"
+    "whatsappOpen": "Chat on WhatsApp",
+    "googleSection": "Gmail & Calendar",
+    "googleExplainer": "Connect your Google account so I can read, draft and send email for you, and check or add to your calendar.",
+    "googleConnect": "Connect Google account",
+    "googleConnected": "Connected as {{email}}. I can handle your email and calendar now.",
+    "googleDisconnect": "Disconnect"
   }
 }

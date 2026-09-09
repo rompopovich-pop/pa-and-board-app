@@ -23,4 +23,21 @@ export const config = {
     appSecret: process.env.WHATSAPP_APP_SECRET,
   },
   reminderPollIntervalMs: Number(process.env.REMINDER_POLL_INTERVAL_MS ?? 30_000),
+  // Where voice notes and TTS replies are written (spec section 5).
+  storageDir: process.env.STORAGE_DIR ?? "storage",
+  // Voice pipeline providers - both optional; without them voice notes get a
+  // text apology and replies stay text (services/voice.ts).
+  voice: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    elevenLabsApiKey: process.env.ELEVENLABS_API_KEY,
+    elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM",
+    elevenLabsModelId: process.env.ELEVENLABS_MODEL_ID ?? "eleven_v3",
+  },
+  // Google OAuth for Gmail + Calendar (spec section 6). Optional; the PA tells
+  // the user honestly when it isn't configured.
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:4000/oauth/google/callback",
+  },
 };

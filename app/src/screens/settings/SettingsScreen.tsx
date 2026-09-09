@@ -1,11 +1,13 @@
-import React, { useState } from "react";
-import { Alert, Linking, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Alert, AppState, Linking, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
 import { ScreenContainer, Button, Card, TextField } from "../../components";
 import { extractErrorMessage } from "../../api/client";
+import { disconnectGoogle, fetchGoogleConnectUrl, fetchGoogleStatus, type GoogleStatus } from "../../api/pa";
 import type { SupportedLanguage } from "../../i18n";
 
 const WHATSAPP_NUMBER = process.env.EXPO_PUBLIC_WHATSAPP_NUMBER;
@@ -19,6 +21,57 @@ export function SettingsScreen() {
   const [phoneDraft, setPhoneDraft] = useState(user?.phone ?? "");
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState<string | undefined>();
+
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleError, setGoogleError] = useState<string | undefined>();
+
+  const refreshGoogle = useCallback(async () => {
+    try {
+      setGoogle(await fetchGoogleStatus());
+    } catch {
+      // Leave the card as-is; the next focus/foreground will retry.
+    }
+  }, []);
+
+  // The OAuth consent happens in the browser, so re-check when the user
+  // comes back to the app (or to this screen).
+  useFocusEffect(
+    useCallback(() => {
+      refreshGoogle();
+    }, [refreshGoogle]),
+  );
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshGoogle();
+    });
+    return () => subscription.remove();
+  }, [refreshGoogle]);
+
+  async function handleConnectGoogle() {
+    setGoogleBusy(true);
+    setGoogleError(undefined);
+    try {
+      await Linking.openURL(await fetchGoogleConnectUrl());
+    } catch (err) {
+      setGoogleError(extractErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    setGoogleBusy(true);
+    setGoogleError(undefined);
+    try {
+      await disconnectGoogle();
+      await refreshGoogle();
+    } catch (err) {
+      setGoogleError(extractErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   async function handleSelectLanguage(next: SupportedLanguage) {
     if (next === language) return;
@@ -120,6 +173,47 @@ export function SettingsScreen() {
           <Button label={t("settings.whatsappOpen")} variant="secondary" onPress={handleOpenWhatsApp} />
         ) : null}
       </Card>
+
+      {google?.configured ? (
+        <Card style={{ gap: spacing.sm }}>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fontFamilyBodyMedium,
+              fontSize: typography.sizes.sm,
+            }}
+          >
+            {t("settings.googleSection")}
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontFamily: typography.fontFamilyBody,
+              fontSize: typography.sizes.sm,
+              lineHeight: typography.sizes.sm * 1.4,
+            }}
+          >
+            {google.connected
+              ? t("settings.googleConnected", { email: google.email ?? "" })
+              : t("settings.googleExplainer")}
+          </Text>
+          {googleError ? (
+            <Text style={{ color: colors.danger, fontFamily: typography.fontFamilyBody, fontSize: typography.sizes.xs }}>
+              {googleError}
+            </Text>
+          ) : null}
+          {google.connected ? (
+            <Button
+              label={t("settings.googleDisconnect")}
+              variant="secondary"
+              onPress={handleDisconnectGoogle}
+              loading={googleBusy}
+            />
+          ) : (
+            <Button label={t("settings.googleConnect")} onPress={handleConnectGoogle} loading={googleBusy} />
+          )}
+        </Card>
+      ) : null}
 
       {user ? (
         <Card style={{ borderRadius: radii.lg }}>

@@ -12,6 +12,10 @@ Sessions built so far, per `build-sequence.md`:
   conversation engine (general chat + reminders), the reminder scheduler, and
   the in-app "PA" chat UI — all sharing one conversation per user across
   channels.
+- **Session 2** — PA Phase 2: the voice pipeline (voice notes in, spoken
+  replies out, on both WhatsApp and the app), Gmail OAuth with read/draft/send
+  under the auto-send-vs-draft rule, and Google Calendar for availability and
+  creating events.
 
 No Business Board features are built yet.
 
@@ -24,7 +28,7 @@ No Business Board features are built yet.
 
 ```bash
 cd backend
-cp .env.example .env          # set ANTHROPIC_API_KEY, and WHATSAPP_* if testing that channel
+cp .env.example .env          # ANTHROPIC_API_KEY; plus WHATSAPP_*, OPENAI/ELEVENLABS, GOOGLE_* per feature
 docker compose up -d          # starts local Postgres on :5432
 npm install
 npm run prisma:migrate        # creates the users/messages/reminders tables
@@ -37,8 +41,13 @@ Auth endpoints: `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` (Bearer
 token), `PATCH /auth/me` (update name/timezone/phone — used to link a
 WhatsApp number to an existing app account).
 
-PA endpoints: `GET /pa/messages`, `POST /pa/messages` (Bearer token) — both
-read/write the same conversation log the WhatsApp webhook uses.
+PA endpoints (Bearer token): `GET /pa/messages`, `POST /pa/messages` (text),
+`POST /pa/messages/voice` (multipart `audio`), `GET /pa/messages/:id/audio`,
+`POST /pa/drafts/:id/send|discard` — all read/write the same conversation
+log the WhatsApp webhook uses.
+
+Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
+(Bearer token); `GET /oauth/google/callback` is Google's redirect target.
 
 ## PA: conversation engine, reminders, WhatsApp
 
@@ -60,6 +69,30 @@ read/write the same conversation log the WhatsApp webhook uses.
 - An app user links the same WhatsApp number to their account from
   Settings → WhatsApp (calls `PATCH /auth/me`), so both channels land in one
   backend user record per pa-whatsapp-spec.md section 3.
+
+## PA: voice, Gmail, Calendar (Phase 2)
+
+- **Voice** (`backend/src/services/voice.ts`) is an adapter around the same
+  text engine: a voice note (WhatsApp audio message, or the app's mic button)
+  is transcribed with Whisper (`OPENAI_API_KEY`), handled as a normal text
+  turn, and the reply is spoken back with ElevenLabs (`ELEVENLABS_API_KEY`)
+  — "reply in kind". Transcripts land in the conversation log so both
+  channels show them; audio files live under `backend/storage/` and are served
+  from the authenticated `/pa/messages/:id/audio` endpoint. Without the keys,
+  voice notes get a polite text fallback and replies stay text.
+- **Google** (`backend/src/services/google.ts`): one OAuth connection per user
+  covers Gmail (`gmail.modify`) and Calendar (`calendar.events`). Connect from
+  Settings → Gmail & Calendar, or — for a WhatsApp-only user — ask the PA,
+  which sends the link (the signed `state` identifies the user, so no app
+  session is needed). Tokens live in `oauth_connections`.
+- **Email rule** (pa-whatsapp-spec.md section 6) lives in the system prompt of
+  `conversationEngine.ts`, with the spec's examples verbatim. Its two halves are
+  the `send_email` tool (unambiguous requests) and `draft_email` (anything
+  needing judgment; money/contracts/legal/declines always). A draft is saved to
+  Gmail Drafts and tracked in `email_drafts`; the app shows it as a
+  `ConfirmationCard` with Send/Discard, WhatsApp users just reply "send".
+- **Calendar**: `list_calendar_events` (availability/context) and
+  `create_calendar_event` tools, using the user's stored timezone.
 
 ## App setup
 
@@ -102,5 +135,5 @@ issue early is much cheaper than retrofitting it later (see `build-sequence.md`)
 
 ## What's next
 
-Per `build-sequence.md`, Session 2 adds voice (STT/TTS), Gmail OAuth, and
-Google Calendar OAuth to the PA.
+Per `build-sequence.md`, Session 3 adds web search for research and
+booking-assist, presenting options via the confirmation-card pattern.
