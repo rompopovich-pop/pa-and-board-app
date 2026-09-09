@@ -51,8 +51,8 @@ export async function clearAuthToken() {
 
 export interface PublicUser {
   id: string;
-  email: string;
-  name: string;
+  email: string | null;
+  name: string | null;
   phone: string | null;
   timezone: string | null;
   createdAt: string;

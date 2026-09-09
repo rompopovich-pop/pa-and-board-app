@@ -1,7 +1,7 @@
-// Session 0 scope: just enough schema to support basic auth (sign up / log in).
-// Later sessions add messages, reminders, oauth_connections, outreach_tasks,
-// businesses, boards, board_fields, clients, follow_ups, activity_log, etc.
-// per pa-whatsapp-spec.md and business-board-spec.md section 4/8.
+// Session 0: basic auth. Session 1 (pa-whatsapp-spec.md sections 3-4, 7 Phase 1)
+// adds the unified conversation log (Message) and reminders. Later sessions add
+// oauth_connections, outreach_tasks, businesses, boards, board_fields, clients,
+// follow_ups, activity_log, etc. per pa-whatsapp-spec.md and business-board-spec.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,15 +12,79 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// email/passwordHash/name are nullable because a user can originate from
+// WhatsApp click-to-chat (phone only, no app account yet) before ever
+// signing up in the app - see pa-whatsapp-spec.md section 2, "Onboarding".
 model User {
   id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
+  email        String?  @unique
+  passwordHash String?  @map("password_hash")
+  name         String?
   phone        String?  @unique
   timezone     String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  messages  Message[]
+  reminders Reminder[]
+
   @@map("users")
+}
+
+enum MessageChannel {
+  app
+  whatsapp
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+// The unified conversation log: one user, one conversation, regardless of
+// which channel (app or WhatsApp) they're using right now - pa-whatsapp-spec.md
+// section 3, "Key principle".
+model Message {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  user      User           @relation(fields: [userId], references: [id])
+  role      MessageRole
+  channel   MessageChannel
+  content   String
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("messages")
+}
+
+enum ReminderStatus {
+  pending
+  sent
+  cancelled
+}
+
+enum ReminderRecurrence {
+  none
+  daily
+  weekly
+  monthly
+}
+
+model Reminder {
+  id         String             @id @default(uuid())
+  userId     String             @map("user_id")
+  user       User               @relation(fields: [userId], references: [id])
+  text       String
+  dueAt      DateTime           @map("due_at")
+  status     ReminderStatus     @default(pending)
+  recurrence ReminderRecurrence @default(none)
+  // Channel the reminder was created from / should be delivered to, per
+  // design-ux-localization-spec.md + pa-whatsapp-spec.md section 2
+  // ("fire back into whichever channel you last used").
+  channel    MessageChannel     @default(app)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  @@index([status, dueAt])
+  @@map("reminders")
 }

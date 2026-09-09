@@ -5,9 +5,15 @@ personal assistant, and a "Business Board" CRM for small business owners. See
 `pa-whatsapp-spec.md`, `business-board-spec.md`, `design-ux-localization-spec.md`,
 and `build-sequence.md` for the full product/technical specs.
 
-This is the **Session 0 shared foundation**: app shell, i18n (English + Hebrew
-with RTL), the base design system, backend scaffold, Postgres, and basic auth.
-No PA or Board features are built yet.
+Sessions built so far, per `build-sequence.md`:
+- **Session 0** — shared foundation: app shell, i18n (English + Hebrew with
+  RTL), the base design system, backend scaffold, Postgres, basic auth.
+- **Session 1** — PA Phase 1: WhatsApp Cloud API integration, the Claude-powered
+  conversation engine (general chat + reminders), the reminder scheduler, and
+  the in-app "PA" chat UI — all sharing one conversation per user across
+  channels.
+
+No Business Board features are built yet.
 
 ## Layout
 
@@ -18,22 +24,48 @@ No PA or Board features are built yet.
 
 ```bash
 cd backend
-cp .env.example .env
+cp .env.example .env          # set ANTHROPIC_API_KEY, and WHATSAPP_* if testing that channel
 docker compose up -d          # starts local Postgres on :5432
 npm install
-npm run prisma:migrate        # creates the users table
+npm run prisma:migrate        # creates the users/messages/reminders tables
 npm run dev                   # http://localhost:4000
 ```
 
 Sanity check: `curl http://localhost:4000/health` should return `{"status":"ok"}`.
 
-Auth endpoints: `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` (Bearer token).
+Auth endpoints: `POST /auth/signup`, `POST /auth/login`, `GET /auth/me` (Bearer
+token), `PATCH /auth/me` (update name/timezone/phone — used to link a
+WhatsApp number to an existing app account).
+
+PA endpoints: `GET /pa/messages`, `POST /pa/messages` (Bearer token) — both
+read/write the same conversation log the WhatsApp webhook uses.
+
+## PA: conversation engine, reminders, WhatsApp
+
+- `backend/src/services/conversationEngine.ts` runs the Claude API tool-use
+  loop shared by both channels (`handleIncomingMessage(userId, text, channel)`).
+  Tools: `create_reminder`, `list_reminders`, `cancel_reminder`,
+  `update_user_profile` (name/timezone, used for onboarding a new WhatsApp
+  contact). Requires `ANTHROPIC_API_KEY` — without it, the engine replies
+  with a friendly fallback message rather than crashing.
+- `backend/src/services/scheduler.ts` polls for due reminders and delivers
+  them into the shared conversation log (plus a real WhatsApp send, if the
+  reminder's channel is `whatsapp`) — so a reminder shows up in the app chat
+  even if it was created (or fires) on WhatsApp.
+- `backend/src/routes/whatsapp.ts` handles Meta's webhook verification
+  handshake and incoming messages, with `X-Hub-Signature-256` verification
+  when `WHATSAPP_APP_SECRET` is set. A message from an unknown phone number
+  creates a new user (click-to-chat onboarding, `wa.me/<your-number>`) —
+  the conversation engine then asks for their name/timezone conversationally.
+- An app user links the same WhatsApp number to their account from
+  Settings → WhatsApp (calls `PATCH /auth/me`), so both channels land in one
+  backend user record per pa-whatsapp-spec.md section 3.
 
 ## App setup
 
 ```bash
 cd app
-cp .env.example .env          # set EXPO_PUBLIC_API_URL if not using localhost
+cp .env.example .env          # set EXPO_PUBLIC_API_URL / EXPO_PUBLIC_WHATSAPP_NUMBER as needed
 npm install
 npx expo install --fix        # reconcile native dep versions for your SDK/toolchain
 npm start                     # opens Expo dev tools; press i / a for iOS/Android
@@ -47,8 +79,9 @@ All colors, spacing, radii, and typography live in `app/src/theme/tokens.ts` —
 every screen consumes these tokens rather than hardcoding values, so the warm
 palette (cream background, terracotta primary accent, sage secondary) or the
 corner radius can be changed in one place. The reusable "this needs your OK"
-pattern lives in `app/src/components/ConfirmationCard.tsx` and is demoed on
-both placeholder screens (PA and Business Board modes).
+pattern lives in `app/src/components/ConfirmationCard.tsx` (demoed on the
+Business Board placeholder; the PA's confirmation-gated actions — email,
+bookings, outreach — land in later sessions).
 
 ## i18n & RTL
 
@@ -69,5 +102,5 @@ issue early is much cheaper than retrofitting it later (see `build-sequence.md`)
 
 ## What's next
 
-Per `build-sequence.md`, Session 1 builds the PA's WhatsApp integration,
-conversation engine, and reminders on top of this shell.
+Per `build-sequence.md`, Session 2 adds voice (STT/TTS), Gmail OAuth, and
+Google Calendar OAuth to the PA.
