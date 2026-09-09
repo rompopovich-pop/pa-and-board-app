@@ -4,12 +4,20 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { signAuthToken } from "../utils/jwt";
 import { requireAuth } from "../middleware/auth";
+import { normalizePhone } from "../utils/phone";
 
 const router = Router();
 
 const SALT_ROUNDS = 10;
 
-function toPublicUser(user: { id: string; email: string; name: string; phone: string | null; timezone: string | null; createdAt: Date }) {
+function toPublicUser(user: {
+  id: string;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  timezone: string | null;
+  createdAt: Date;
+}) {
   return {
     id: user.id,
     email: user.email,
@@ -60,7 +68,7 @@ router.post("/login", async (req, res) => {
   const { email, password } = parsed.data;
 
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
+  if (!user || !user.passwordHash) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
@@ -78,6 +86,40 @@ router.get("/me", requireAuth, async (req, res) => {
   if (!user) {
     return res.status(404).json({ error: "User not found" });
   }
+  res.json({ user: toPublicUser(user) });
+});
+
+// Lets an app user link their WhatsApp number to this same account (or
+// update name/timezone) - pa-whatsapp-spec.md section 2: "Either path lands
+// the user in the same backend user record."
+const updateMeSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  timezone: z.string().trim().min(1).optional(),
+  phone: z
+    .string()
+    .trim()
+    .transform(normalizePhone)
+    .refine((digits) => digits.length >= 8 && digits.length <= 15, "Enter a valid phone number")
+    .optional(),
+});
+
+router.patch("/me", requireAuth, async (req, res) => {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
+  }
+
+  if (parsed.data.phone) {
+    const existing = await prisma.user.findUnique({ where: { phone: parsed.data.phone } });
+    if (existing && existing.id !== req.userId) {
+      return res.status(409).json({ error: "That phone number is already linked to another account" });
+    }
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.userId },
+    data: parsed.data,
+  });
   res.json({ user: toPublicUser(user) });
 });
 

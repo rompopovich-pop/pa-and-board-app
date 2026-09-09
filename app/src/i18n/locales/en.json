@@ -35,11 +35,9 @@
   },
   "pa": {
     "placeholderTitle": "Hi, I'm your assistant",
-    "placeholderBody": "This is where our conversation will live — text or voice, on the app or WhatsApp. Reminders, email, calendar, research, and reaching out to people for you are all coming soon.",
-    "demoCardTitle": "This needs your OK",
-    "demoCardBody": "Here's a preview of how I'll ask before I do anything on your behalf — like sending an email or booking something.",
-    "demoCardApprove": "Looks good",
-    "demoCardDismiss": "Not now"
+    "placeholderBody": "Say hi to get started. I can chat and manage reminders for now — email, calendar, research, and reaching out to people for you are coming soon. Message me here or on WhatsApp, it's the same conversation either way.",
+    "inputPlaceholder": "Message your assistant…",
+    "send": "Send"
   },
   "board": {
     "placeholderTitle": "Your Business Board",
@@ -56,6 +54,11 @@
     "languageHebrew": "עברית",
     "restartNotice": "The app will restart to apply the new layout direction.",
     "account": "Account",
-    "logout": "Log out"
+    "logout": "Log out",
+    "whatsappSection": "WhatsApp",
+    "whatsappExplainer": "Link your WhatsApp number to chat with me there too — it's the same conversation either way.",
+    "whatsappPhoneLabel": "Your WhatsApp number",
+    "whatsappSave": "Save number",
+    "whatsappOpen": "Chat on WhatsApp"
   }
 }

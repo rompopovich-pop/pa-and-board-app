@@ -1,17 +1,24 @@
-import React from "react";
-import { Alert, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, Linking, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useAuth } from "../../context/AuthContext";
-import { ScreenContainer, Button, Card } from "../../components";
+import { ScreenContainer, Button, Card, TextField } from "../../components";
+import { extractErrorMessage } from "../../api/client";
 import type { SupportedLanguage } from "../../i18n";
+
+const WHATSAPP_NUMBER = process.env.EXPO_PUBLIC_WHATSAPP_NUMBER;
 
 export function SettingsScreen() {
   const { t } = useTranslation();
   const { colors, typography, spacing, radii } = useTheme();
   const { language, setLanguage } = useLanguage();
-  const { user, logOut } = useAuth();
+  const { user, logOut, updateProfile } = useAuth();
+
+  const [phoneDraft, setPhoneDraft] = useState(user?.phone ?? "");
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | undefined>();
 
   async function handleSelectLanguage(next: SupportedLanguage) {
     if (next === language) return;
@@ -19,6 +26,24 @@ export function SettingsScreen() {
       { text: t("common.cancel"), style: "cancel" },
       { text: t("common.confirm"), onPress: () => setLanguage(next) },
     ]);
+  }
+
+  async function handleSavePhone() {
+    if (!phoneDraft.trim()) return;
+    setSavingPhone(true);
+    setPhoneError(undefined);
+    try {
+      await updateProfile({ phone: phoneDraft.trim() });
+    } catch (err) {
+      setPhoneError(extractErrorMessage(err));
+    } finally {
+      setSavingPhone(false);
+    }
+  }
+
+  function handleOpenWhatsApp() {
+    if (!WHATSAPP_NUMBER) return;
+    Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hi")}`);
   }
 
   return (
@@ -57,6 +82,45 @@ export function SettingsScreen() {
         </View>
       </Card>
 
+      <Card style={{ gap: spacing.sm }}>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontFamily: typography.fontFamilyBodyMedium,
+            fontSize: typography.sizes.sm,
+          }}
+        >
+          {t("settings.whatsappSection")}
+        </Text>
+        <Text
+          style={{
+            color: colors.textSecondary,
+            fontFamily: typography.fontFamilyBody,
+            fontSize: typography.sizes.sm,
+            lineHeight: typography.sizes.sm * 1.4,
+          }}
+        >
+          {t("settings.whatsappExplainer")}
+        </Text>
+        <TextField
+          label={t("settings.whatsappPhoneLabel")}
+          value={phoneDraft}
+          onChangeText={setPhoneDraft}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          errorMessage={phoneError}
+        />
+        <Button
+          label={t("settings.whatsappSave")}
+          onPress={handleSavePhone}
+          loading={savingPhone}
+          disabled={!phoneDraft.trim() || phoneDraft.trim() === user?.phone}
+        />
+        {WHATSAPP_NUMBER ? (
+          <Button label={t("settings.whatsappOpen")} variant="secondary" onPress={handleOpenWhatsApp} />
+        ) : null}
+      </Card>
+
       {user ? (
         <Card style={{ borderRadius: radii.lg }}>
           <Text
@@ -77,7 +141,7 @@ export function SettingsScreen() {
               marginBottom: spacing.md,
             }}
           >
-            {user.name} · {user.email}
+            {[user.name, user.email].filter(Boolean).join(" · ")}
           </Text>
           <Button label={t("settings.logout")} variant="secondary" onPress={logOut} />
         </Card>
