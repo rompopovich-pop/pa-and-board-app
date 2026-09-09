@@ -5,11 +5,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../theme";
 import { ScreenContainer } from "../../components";
-import { ChatBubble } from "./ChatBubble";
+import { ChatBubble, type ResearchAction } from "./ChatBubble";
 import { ChatInputBar } from "./ChatInputBar";
 import { useAudioPlayer } from "./useAudioPlayer";
 import {
+  confirmResearchOption,
   discardDraft,
+  dismissResearchOptions,
   fetchMessages,
   sendDraft,
   sendMessage,
@@ -151,6 +153,34 @@ export function PAHomeScreen() {
     }
   }
 
+  // Confirming a research option is an explicit user act: the pick is
+  // recorded, then the PA replies with the link and next steps. Nothing is
+  // booked or paid by this.
+  async function handleResearchAction(action: ResearchAction) {
+    if (sending) return;
+    setSending(true);
+    sendingRef.current = true;
+    setError(undefined);
+    try {
+      const { userMessage, assistantMessage } =
+        action.action === "confirm"
+          ? await confirmResearchOption(action.sessionId, action.optionId)
+          : await dismissResearchOptions(action.sessionId);
+      sendingRef.current = false;
+      // Refresh first so the card's new status lands, then append the turn.
+      await refresh();
+      setMessages((current) => {
+        const seen = new Set(current.map((m) => m.id));
+        return [...current, ...[userMessage, assistantMessage].filter((m) => !seen.has(m.id))];
+      });
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setSending(false);
+      sendingRef.current = false;
+    }
+  }
+
   async function handleDraftAction(draftId: string, action: "send" | "discard") {
     if (sending) return;
     setSending(true);
@@ -207,9 +237,11 @@ export function PAHomeScreen() {
               <ChatBubble
                 message={item}
                 isPlaying={item.audioUrl !== null && player.playingUrl === item.audioUrl}
+                busy={sending}
                 onPlayAudio={(url) => player.play(url).catch((err) => setError(extractErrorMessage(err)))}
                 onStopAudio={player.stop}
                 onDraftAction={handleDraftAction}
+                onResearchAction={handleResearchAction}
               />
             )}
             contentContainerStyle={{ gap: spacing.sm, flexGrow: 1, justifyContent: "flex-end" }}

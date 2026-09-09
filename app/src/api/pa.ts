@@ -14,6 +14,24 @@ export interface EmailDraftMetadata {
   status: "pending" | "sent" | "discarded";
 }
 
+export interface ResearchOption {
+  id: string;
+  title: string;
+  summary: string;
+  price?: string;
+  url?: string;
+  details?: string;
+}
+
+export interface ResearchOptionsMetadata {
+  type: "research_options";
+  sessionId: string;
+  request: string;
+  options: ResearchOption[];
+  status: "pending" | "confirmed" | "dismissed";
+  chosenOptionId?: string;
+}
+
 export interface ConversationMessage {
   id: string;
   role: MessageRole;
@@ -22,7 +40,7 @@ export interface ConversationMessage {
   content: string;
   /** Relative API path (e.g. /pa/messages/<id>/audio); needs the auth header. */
   audioUrl: string | null;
-  metadata: EmailDraftMetadata | Record<string, unknown> | null;
+  metadata: EmailDraftMetadata | ResearchOptionsMetadata | Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -33,6 +51,10 @@ export interface TurnResponse {
 
 export function isEmailDraft(metadata: ConversationMessage["metadata"]): metadata is EmailDraftMetadata {
   return Boolean(metadata && (metadata as EmailDraftMetadata).type === "email_draft");
+}
+
+export function isResearchOptions(metadata: ConversationMessage["metadata"]): metadata is ResearchOptionsMetadata {
+  return Boolean(metadata && (metadata as ResearchOptionsMetadata).type === "research_options");
 }
 
 export async function fetchMessages(): Promise<ConversationMessage[]> {
@@ -85,6 +107,19 @@ export async function sendDraft(draftId: string): Promise<ConversationMessage> {
 export async function discardDraft(draftId: string): Promise<ConversationMessage> {
   const { data } = await apiClient.post<{ assistantMessage: ConversationMessage }>(`/pa/drafts/${draftId}/discard`);
   return data.assistantMessage;
+}
+
+/** Records the user's explicit pick, then runs it through the engine so the
+ * PA hands over the link and offers a calendar event or reminder. Nothing is
+ * booked or paid by this - the user completes it themselves. */
+export async function confirmResearchOption(sessionId: string, optionId: string): Promise<TurnResponse> {
+  const { data } = await apiClient.post<TurnResponse>(`/pa/research/${sessionId}/confirm`, { optionId });
+  return data;
+}
+
+export async function dismissResearchOptions(sessionId: string): Promise<TurnResponse> {
+  const { data } = await apiClient.post<TurnResponse>(`/pa/research/${sessionId}/dismiss`);
+  return data;
 }
 
 export interface GoogleStatus {

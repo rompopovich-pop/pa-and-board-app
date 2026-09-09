@@ -1,9 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { EmailDraft, Message, MessageChannel, MessageModality, User } from "@prisma/client";
+import { EmailDraft, Message, MessageChannel, MessageModality, ResearchSession, User } from "@prisma/client";
 import { prisma } from "../db";
 import { getAnthropicClient, CONVERSATION_MODEL } from "./anthropic";
 import { reminderTools, executeReminderTool } from "./reminderTools";
 import { googleTools, googleToolNames, executeGoogleTool, listPendingDrafts } from "./googleTools";
+import {
+  researchTools,
+  researchToolNames,
+  executeResearchTool,
+  latestResearchSession,
+  optionsOf,
+  webSearchToolFor,
+} from "./researchTools";
 import { getGoogleConnection, isGoogleConfigured } from "./google";
 import { isTtsConfigured, synthesizeSpeech } from "./voice";
 import { saveAudio } from "./storage";
@@ -16,10 +24,15 @@ import { TurnContext } from "./toolContext";
 // notes before calling it, and it synthesizes a spoken reply on request.
 
 const HISTORY_LIMIT = 30;
-const MAX_TOOL_ITERATIONS = 8;
+// Web search runs server-side inside a single API call, but a long search
+// can come back as pause_turn and need resuming - so the loop allows a few
+// more iterations than the custom tools alone would need.
+const MAX_TOOL_ITERATIONS = 10;
 const FALLBACK_REPLY = "Sorry, I'm having trouble connecting right now - please try again in a bit.";
 
-const tools = [...reminderTools, ...googleTools];
+function toolsFor(user: Pick<User, "timezone">): Anthropic.Messages.ToolUnion[] {
+  return [...reminderTools, ...googleTools, ...researchTools, webSearchToolFor(user.timezone)];
+}
 
 interface PromptContext {
   user: Pick<User, "name" | "timezone">;
@@ -27,7 +40,14 @@ interface PromptContext {
   modality: MessageModality;
   googleConnected: boolean;
   pendingDrafts: EmailDraft[];
+  latestResearch: ResearchSession | null;
 }
+
+const RESEARCH_RULE = `Research & booking-assist (flights, hotels, restaurants, products, anything to plan or buy):
+- Use web_search to research, then call present_options with 2-4 concrete options: a short title, a one-line summary, the price if known, and a link to view or book. If you can't find 2 decent options, ask a clarifying question instead of padding the list.
+- You cannot book, reserve, or pay for anything, and you must never say or imply that you have. The user completes any booking themselves through the option's link. Nothing counts as chosen until they explicitly pick one.
+- When they explicitly pick an option ("option 2", "the morning flight", "yes, that one"), call confirm_option, then give them the link to complete it and offer to add it to their calendar or set a reminder. If none suit them, call dismiss_options and ask what to change before searching again.
+- For a quick factual question, just search and answer in a sentence or two - present_options is only for choices the user needs to make.`;
 
 const EMAIL_RULE = `Email rule - auto-send vs draft (this matters a lot):
 - Send directly with send_email ONLY when the request is unambiguous: a clear recipient AND clear content, where the user has already decided what to say and you're just delivering it. Examples of requests to send directly: "Tell Dana I'll be there at 3"; "Confirm the meeting time with Alex for tomorrow at 10am"; "Send my flight details to Maria"; "Reply to the landlord that rent will be paid by Friday"; "Let the team know I'll be 10 minutes late".
@@ -38,7 +58,7 @@ const EMAIL_RULE = `Email rule - auto-send vs draft (this matters a lot):
 - After sending anything, tell the user you did, briefly ("Done - sent to Dana.").`;
 
 function buildSystemPrompt(ctx: PromptContext): string {
-  const { user, channel, modality, googleConnected, pendingDrafts } = ctx;
+  const { user, channel, modality, googleConnected, pendingDrafts, latestResearch } = ctx;
   const nowIso = new Date().toISOString();
 
   const identity = user.name
@@ -54,10 +74,29 @@ function buildSystemPrompt(ctx: PromptContext): string {
     : "";
 
   const capabilities = googleConnected
-    ? "You can: chat; manage reminders (create, list, cancel); read, draft and send email through their Gmail; and read their calendar for availability/context and create events on it. Web research and reaching out to people on their behalf are coming soon - if asked, say so honestly rather than pretending."
+    ? "You can: chat; manage reminders (create, list, cancel); search the web to research and plan things and present options; read, draft and send email through their Gmail; and read their calendar for availability/context and create events on it. Reaching out to people on their behalf is coming soon - if asked, say so honestly rather than pretending."
     : isGoogleConfigured()
-      ? "You can: chat and manage reminders (create, list, cancel). Email and calendar are available once they connect their Google account - if they ask for anything email- or calendar-related, explain that in one line and call get_google_connect_link so you can give them the link. Web research and reaching out to people on their behalf are coming soon."
-      : "You can: chat and manage reminders (create, list, cancel). Email, calendar, web research, and reaching out to people on their behalf aren't available yet - if asked, say so honestly rather than pretending.";
+      ? "You can: chat; manage reminders (create, list, cancel); and search the web to research and plan things and present options. Email and calendar are available once they connect their Google account - if they ask for anything email- or calendar-related, explain that in one line and call get_google_connect_link so you can give them the link. Reaching out to people on their behalf is coming soon."
+      : "You can: chat; manage reminders (create, list, cancel); and search the web to research and plan things and present options. Email, calendar, and reaching out to people on their behalf aren't available yet - if asked, say so honestly rather than pretending.";
+
+  const researchPresentation =
+    channel === "app"
+      ? "When you present options, the app shows them in a card with a Confirm button - don't repeat every detail; give a one-line lead-in and ask which they'd like."
+      : "When you present options, list them as a numbered list (title, price, link) and ask them to reply with a number.";
+
+  const researchNote = latestResearch
+    ? (() => {
+        const status = latestResearch.confirmed ? "confirmed" : latestResearch.dismissedAt ? "dismissed" : "pending";
+        const lines = optionsOf(latestResearch).map(
+          (o, i) => `  ${i + 1}. ${o.title}${o.price ? ` - ${o.price}` : ""}${o.url ? ` - ${o.url}` : ""}${o.id === latestResearch.chosenOptionId ? " (chosen)" : ""}`,
+        );
+        return `Latest options you presented (session_id ${latestResearch.id}, status: ${status}) for "${latestResearch.request}":\n${lines.join("\n")}${
+          status === "confirmed"
+            ? "\nThe choice is already recorded - don't call confirm_option again; help them complete it (link, calendar event, reminder)."
+            : ""
+        }`;
+      })()
+    : "";
 
   const draftsNote = pendingDrafts.length
     ? `Email drafts waiting for the user's OK (most recent first):\n${pendingDrafts
@@ -83,6 +122,9 @@ function buildSystemPrompt(ctx: PromptContext): string {
     `The current UTC date and time is ${nowIso}.`,
     capabilities,
     "When creating a reminder or calendar event, compute times as absolute UTC ISO 8601 datetimes from what they said plus the current time/timezone above.",
+    RESEARCH_RULE,
+    researchPresentation,
+    researchNote,
     googleConnected ? EMAIL_RULE : "",
     googleConnected ? draftPresentation : "",
     draftsNote,
@@ -131,16 +173,22 @@ export async function handleIncomingMessage(
     content: m.content,
   }));
 
-  const [googleConnection, pendingDrafts] = await Promise.all([getGoogleConnection(userId), listPendingDrafts(userId)]);
+  const [googleConnection, pendingDrafts, latestResearch] = await Promise.all([
+    getGoogleConnection(userId),
+    listPendingDrafts(userId),
+    latestResearchSession(userId),
+  ]);
   const system = buildSystemPrompt({
     user,
     channel,
     modality,
     googleConnected: Boolean(googleConnection),
     pendingDrafts,
+    latestResearch,
   });
 
   const turn: TurnContext = { userId, channel };
+  const tools = toolsFor(user);
   let finalText = "";
 
   try {
@@ -149,7 +197,7 @@ export async function handleIncomingMessage(
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const response = await client.messages.create({
         model: CONVERSATION_MODEL,
-        max_tokens: 2048,
+        max_tokens: 4096,
         // Chat is latency-sensitive and doesn't need deep reasoning, but the
         // send-vs-draft judgment and date math benefit from a bit of care -
         // medium splits the difference.
@@ -161,10 +209,19 @@ export async function handleIncomingMessage(
 
       const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text");
+      // Cited text (from web search) arrives split across several text
+      // blocks mid-sentence, so join without adding separators.
       finalText = textBlocks
         .map((b) => b.text)
-        .join("\n\n")
+        .join("")
         .trim();
+
+      // The server-side search loop hit its iteration cap; resend the
+      // partial assistant turn and it resumes where it left off.
+      if (response.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: response.content });
+        continue;
+      }
 
       if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
         break;
@@ -178,7 +235,9 @@ export async function handleIncomingMessage(
         try {
           result = googleToolNames.has(toolUse.name)
             ? await executeGoogleTool(turn, toolUse.name, toolUse.input)
-            : await executeReminderTool(userId, channel, toolUse.name, toolUse.input);
+            : researchToolNames.has(toolUse.name)
+              ? await executeResearchTool(turn, toolUse.name, toolUse.input)
+              : await executeReminderTool(userId, channel, toolUse.name, toolUse.input);
         } catch (error) {
           console.error(`Tool ${toolUse.name} failed:`, error);
           result = JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Tool failed" });

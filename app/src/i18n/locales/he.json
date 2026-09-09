@@ -51,7 +51,14 @@
     "draftSend": "שליחה",
     "draftDiscard": "ביטול",
     "draftSent": "נשלח",
-    "draftDiscarded": "בוטל"
+    "draftDiscarded": "בוטל",
+    "researchTitle": "הנה מה שמצאתי — בחרו אחת",
+    "researchView": "צפייה",
+    "researchNotBooked": "עדיין לא הזמנתי ולא שילמתי על כלום. האישור רק אומר לי במה בחרתם — את ההזמנה עצמה תשלימו דרך הקישור.",
+    "researchConfirm": "אישור",
+    "researchDismiss": "אף אחת",
+    "researchConfirmed": "בחרתם",
+    "researchDismissed": "בוטל"
   },
   "board": {
     "placeholderTitle": "הלוח העסקי שלך",

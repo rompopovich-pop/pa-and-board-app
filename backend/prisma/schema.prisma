@@ -29,8 +29,29 @@ model User {
   reminders        Reminder[]
   oauthConnections OAuthConnection[]
   emailDrafts      EmailDraft[]
+  researchSessions ResearchSession[]
 
   @@map("users")
+}
+
+// pa-whatsapp-spec.md section 8: a research/booking-assist request, the
+// 2-4 options the PA presented, and which one the user explicitly confirmed.
+// Nothing transactional ever happens here - "confirmed" means the user
+// picked an option; they complete any booking themselves via its link.
+model ResearchSession {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  user           User      @relation(fields: [userId], references: [id])
+  request        String
+  options        Json
+  chosenOptionId String?   @map("chosen_option_id")
+  confirmed      Boolean   @default(false)
+  dismissedAt    DateTime? @map("dismissed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@map("research_sessions")
 }
 
 enum MessageChannel {

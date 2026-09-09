@@ -51,7 +51,14 @@
     "draftSend": "Send",
     "draftDiscard": "Discard",
     "draftSent": "Sent",
-    "draftDiscarded": "Discarded"
+    "draftDiscarded": "Discarded",
+    "researchTitle": "Here's what I found — pick one",
+    "researchView": "View",
+    "researchNotBooked": "Nothing is booked or paid for yet. Confirming just tells me which one you want — you complete the booking through the link.",
+    "researchConfirm": "Confirm",
+    "researchDismiss": "None fit",
+    "researchConfirmed": "You chose",
+    "researchDismissed": "Dismissed"
   },
   "board": {
     "placeholderTitle": "Your Business Board",

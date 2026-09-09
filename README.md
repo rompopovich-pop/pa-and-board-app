@@ -16,6 +16,9 @@ Sessions built so far, per `build-sequence.md`:
   replies out, on both WhatsApp and the app), Gmail OAuth with read/draft/send
   under the auto-send-vs-draft rule, and Google Calendar for availability and
   creating events.
+- **Session 3** — PA Phase 3: web search for research and booking-assist,
+  presenting 2-4 options behind the confirmation-card gate — nothing counts
+  as chosen without an explicit pick, and nothing is ever booked or paid.
 
 No Business Board features are built yet.
 
@@ -43,8 +46,8 @@ WhatsApp number to an existing app account).
 
 PA endpoints (Bearer token): `GET /pa/messages`, `POST /pa/messages` (text),
 `POST /pa/messages/voice` (multipart `audio`), `GET /pa/messages/:id/audio`,
-`POST /pa/drafts/:id/send|discard` — all read/write the same conversation
-log the WhatsApp webhook uses.
+`POST /pa/drafts/:id/send|discard`, `POST /pa/research/:id/confirm|dismiss` —
+all read/write the same conversation log the WhatsApp webhook uses.
 
 Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
 (Bearer token); `GET /oauth/google/callback` is Google's redirect target.
@@ -94,6 +97,34 @@ Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
 - **Calendar**: `list_calendar_events` (availability/context) and
   `create_calendar_event` tools, using the user's stored timezone.
 
+## PA: research & booking-assist (Phase 3)
+
+Web search is Anthropic's **server-side** `web_search` tool, declared alongside
+the custom tools in `conversationEngine.ts` — Claude searches inside the same
+API call, so there's no separate search provider or API key to configure. A
+long search can come back as `stop_reason: "pause_turn"`; the engine resends
+the partial turn to resume it.
+
+The confirmation gate lives in `backend/src/services/researchTools.ts`:
+
+- `present_options` stores 2-4 options as a `research_sessions` row and
+  attaches them to the assistant message, which the app renders as a
+  `ConfirmationCard` with radio-selectable options (WhatsApp gets a numbered
+  list). A new set supersedes any older pending one, so "option 2" is never
+  ambiguous.
+- **Nothing is booked, reserved, or paid, ever.** Confirming only records
+  which option the user picked; they complete the booking themselves through
+  the option's link. The card says so in a footnote, the system prompt forbids
+  claiming otherwise, and the tool result repeats it.
+- Confirmation requires an explicit pick: the card's Confirm button stays
+  disabled until an option is selected, and `POST /pa/research/:id/confirm`
+  validates the option against the stored session and refuses a session that
+  is already confirmed or dismissed. On WhatsApp the same gate runs through
+  the `confirm_option` / `dismiss_options` tools.
+- The app records the pick deterministically first, then runs the user's
+  choice through the engine as a normal turn — so the PA hands over the link
+  and offers a calendar event or reminder in the user's own language.
+
 ## App setup
 
 ```bash
@@ -135,5 +166,6 @@ issue early is much cheaper than retrofitting it later (see `build-sequence.md`)
 
 ## What's next
 
-Per `build-sequence.md`, Session 3 adds web search for research and
-booking-assist, presenting options via the confirmation-card pattern.
+Per `build-sequence.md`, Session 4 adds outreach on the user's behalf:
+approved WhatsApp templates, the outreach task state machine, and SMS
+fallback via Twilio.

@@ -8,6 +8,7 @@ import { handleIncomingMessage } from "../services/conversationEngine";
 import { isSttConfigured, transcribeAudio } from "../services/voice";
 import { extensionForMime, mimeForPath, readAudio, saveAudio } from "../services/storage";
 import { discardPendingDraft, sendPendingDraft } from "../services/googleTools";
+import { confirmResearchOption, dismissResearchSession } from "../services/researchTools";
 
 const router = Router();
 router.use(requireAuth);
@@ -107,6 +108,46 @@ router.post("/drafts/:id/send", async (req, res) => {
     data: { userId, role: "assistant", channel: "app", content: `Done - sent to ${draft.to}.` },
   });
   res.json({ assistantMessage: toPublicMessage(assistantMessage) });
+});
+
+// The app's options card. The pick is recorded deterministically first (so
+// nothing depends on the model), then the user's choice runs through the
+// engine as a normal turn so the PA can hand over the link and offer a
+// calendar event or reminder in the user's own language. WhatsApp users do
+// the same by replying with a number (the confirm_option tool).
+const confirmResearchSchema = z.object({
+  optionId: z.string().min(1),
+  text: z.string().trim().min(1).optional(),
+});
+
+router.post("/research/:id/confirm", async (req, res) => {
+  const parsed = confirmResearchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
+  }
+  const userId = req.userId as string;
+  const result = await confirmResearchOption(userId, { sessionId: req.params.id, optionId: parsed.data.optionId });
+  if (!result) return res.status(404).json({ error: "Those options are no longer open" });
+
+  const text = parsed.data.text ?? `I'll go with option ${result.number}: ${result.option.title}`;
+  const { userMessage, assistantMessage } = await handleIncomingMessage(userId, text, "app");
+  res.json({ userMessage: toPublicMessage(userMessage), assistantMessage: toPublicMessage(assistantMessage) });
+});
+
+const dismissResearchSchema = z.object({ text: z.string().trim().min(1).optional() });
+
+router.post("/research/:id/dismiss", async (req, res) => {
+  const parsed = dismissResearchSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
+  }
+  const userId = req.userId as string;
+  const session = await dismissResearchSession(userId, req.params.id);
+  if (!session) return res.status(404).json({ error: "Those options are no longer open" });
+
+  const text = parsed.data.text ?? "None of these work for me.";
+  const { userMessage, assistantMessage } = await handleIncomingMessage(userId, text, "app");
+  res.json({ userMessage: toPublicMessage(userMessage), assistantMessage: toPublicMessage(assistantMessage) });
 });
 
 router.post("/drafts/:id/discard", async (req, res) => {

@@ -3,6 +3,7 @@ import { gmail_v1 } from "@googleapis/gmail";
 import { EmailDraft } from "@prisma/client";
 import { prisma } from "../db";
 import { TurnContext } from "./toolContext";
+import { patchMessageMetadata } from "./messageMetadata";
 import {
   buildGoogleConnectUrl,
   calendarFor,
@@ -245,16 +246,8 @@ async function findPendingDraft(userId: string, draftId?: string): Promise<Email
   return prisma.emailDraft.findFirst({ where: { userId, status: "pending" }, orderBy: { createdAt: "desc" } });
 }
 
-async function markDraftMessages(userId: string, draftId: string, status: "sent" | "discarded"): Promise<void> {
-  // The chat message that carried this draft as a confirmation card gets its
-  // status updated so the card stops offering Send/Discard.
-  const carriers = await prisma.message.findMany({
-    where: { userId, metadata: { path: ["draftId"], equals: draftId } },
-  });
-  for (const carrier of carriers) {
-    const metadata = (carrier.metadata ?? {}) as Record<string, unknown>;
-    await prisma.message.update({ where: { id: carrier.id }, data: { metadata: { ...metadata, status } } });
-  }
+function markDraftMessages(userId: string, draftId: string, status: "sent" | "discarded"): Promise<void> {
+  return patchMessageMetadata(userId, "draftId", draftId, { status });
 }
 
 export async function sendPendingDraft(userId: string, draftId?: string): Promise<EmailDraft | null> {
