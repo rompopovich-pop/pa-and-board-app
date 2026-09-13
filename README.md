@@ -104,6 +104,17 @@ Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
   `ConfirmationCard` with Send/Discard, WhatsApp users just reply "send".
 - **Calendar**: `list_calendar_events` (availability/context) and
   `create_calendar_event` tools, using the user's stored timezone.
+- **Timezone reconciliation.** At connect time the calendar's own timezone is
+  read and stored on the connection (`oauth_connections.calendar_timezone`).
+  It comes from `events.list`, which returns it under the `calendar.events`
+  scope we already hold — `calendar.readonly` would also work but grants read
+  access to every event detail to obtain one field. If the user has no
+  timezone we adopt the calendar's; if the two disagree we keep theirs and the
+  system prompt has the PA raise it once, prefer the calendar's meanwhile
+  (it's what the calendar will actually display), and call
+  `update_user_profile` with the answer. Without this a stale profile
+  timezone puts every event at the wrong hour while the PA states the right
+  one — confidently and incorrectly.
 
 ## PA: research & booking-assist (Phase 3)
 

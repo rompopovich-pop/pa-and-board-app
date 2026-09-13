@@ -106,6 +106,10 @@ model OAuthConnection {
   user         User      @relation(fields: [userId], references: [id])
   provider     String
   accountEmail String?   @map("account_email")
+  // The connected calendar's own timezone, read at connect time. Kept
+  // separate from users.timezone so a mismatch can be surfaced rather than
+  // silently overwriting whatever the user told the PA.
+  calendarTimezone String? @map("calendar_timezone")
   accessToken  String    @map("access_token")
   refreshToken String?   @map("refresh_token")
   expiresAt    DateTime? @map("expires_at")

@@ -36,6 +36,27 @@ export function buildGoogleConnectUrl(userId: string): string {
   });
 }
 
+/** The connected calendar's own timezone. events.list hands this back under
+ * the calendar.events scope we already hold, so no extra consent is needed
+ * (calendar.readonly would work too, but grants far more than one field). */
+export async function fetchCalendarTimezone(client: OAuth2Client): Promise<string | null> {
+  try {
+    const now = new Date();
+    const res = await calendar({ version: "v3", auth: client }).events.list({
+      calendarId: "primary",
+      timeMin: now.toISOString(),
+      timeMax: new Date(now.getTime() + 60_000).toISOString(),
+      maxResults: 1,
+    });
+    return res.data.timeZone ?? null;
+  } catch (error) {
+    // Never fail the connection over this - the PA just keeps using
+    // users.timezone, exactly as it did before.
+    console.warn("Could not read calendar timezone:", error);
+    return null;
+  }
+}
+
 export async function completeGoogleConnection(userId: string, code: string): Promise<string | null> {
   const client = newOAuthClient();
   const { tokens } = await client.getToken(code);
@@ -44,9 +65,11 @@ export async function completeGoogleConnection(userId: string, code: string): Pr
 
   const profile = await gmail({ version: "v1", auth: client }).users.getProfile({ userId: "me" });
   const accountEmail = profile.data.emailAddress ?? null;
+  const calendarTimezone = await fetchCalendarTimezone(client);
 
   const data = {
     accountEmail,
+    calendarTimezone,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? undefined,
     expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
@@ -58,6 +81,17 @@ export async function completeGoogleConnection(userId: string, code: string): Pr
     create: { userId, provider: GOOGLE_PROVIDER, ...data, refreshToken: tokens.refresh_token ?? null },
     update: data,
   });
+
+  // Adopt the calendar's timezone when we don't have one - that's strictly
+  // better than defaulting to UTC and silently scheduling at the wrong hour.
+  // When the two disagree, leave the user's value alone and let the PA raise
+  // it (buildSystemPrompt), since only they can say which is right.
+  if (calendarTimezone) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user && !user.timezone) {
+      await prisma.user.update({ where: { id: userId }, data: { timezone: calendarTimezone } });
+    }
+  }
 
   return accountEmail;
 }

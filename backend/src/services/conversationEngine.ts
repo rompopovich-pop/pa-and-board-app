@@ -75,6 +75,8 @@ interface PromptContext {
   channel: MessageChannel;
   modality: MessageModality;
   googleConnected: boolean;
+  /** The connected calendar's own timezone, when we know it. */
+  calendarTimezone: string | null;
   pendingDrafts: EmailDraft[];
   latestResearch: ResearchSession | null;
 }
@@ -94,8 +96,16 @@ const EMAIL_RULE = `Email rule - auto-send vs draft (this matters a lot):
 - After sending anything, tell the user you did, briefly ("Done - sent to Dana.").`;
 
 function buildSystemPrompt(ctx: PromptContext): string {
-  const { user, channel, modality, googleConnected, pendingDrafts, latestResearch } = ctx;
+  const { user, channel, modality, googleConnected, calendarTimezone, pendingDrafts, latestResearch } = ctx;
   const nowIso = new Date().toISOString();
+
+  // A stale profile timezone silently puts every event at the wrong hour, and
+  // the PA would state the wrong time with full confidence. Only the user can
+  // say which is right, so raise it rather than guessing.
+  const timezoneMismatchNote =
+    calendarTimezone && user.timezone && calendarTimezone !== user.timezone
+      ? `Heads up: their Google Calendar's timezone is ${calendarTimezone}, but their profile says ${user.timezone}. Before you create any event or quote a time, mention this once and ask which to use, then call update_user_profile with their answer. Until they choose, use ${calendarTimezone} - it is what their calendar will actually display.`
+      : "";
 
   const identity = user.name
     ? `You are ${user.name}'s personal assistant, reachable by text or voice through the app or WhatsApp.`
@@ -157,6 +167,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
     TOOL_RECORD_RULE,
     timezoneNote,
     `The current UTC date and time is ${nowIso}.`,
+    timezoneMismatchNote,
     capabilities,
     "When creating a reminder or calendar event, compute times as absolute UTC ISO 8601 datetimes from what they said plus the current time/timezone above.",
     RESEARCH_RULE,
@@ -220,6 +231,7 @@ export async function handleIncomingMessage(
     channel,
     modality,
     googleConnected: Boolean(googleConnection),
+    calendarTimezone: googleConnection?.calendarTimezone ?? null,
     pendingDrafts,
     latestResearch,
   });
