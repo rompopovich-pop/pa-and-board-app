@@ -193,6 +193,11 @@ export async function handleIncomingMessage(
 
   try {
     const client = getAnthropicClient();
+    // web_search does its dynamic filtering inside a server-side code
+    // execution container. Once a turn has one, every later request in the
+    // loop must name it, or the API rejects the follow-up with
+    // "container_id is required when there are pending tool uses".
+    let containerId: string | undefined;
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const response = await client.messages.create({
@@ -205,7 +210,10 @@ export async function handleIncomingMessage(
         system,
         tools,
         messages,
+        ...(containerId ? { container: containerId } : {}),
       });
+
+      containerId = response.container?.id ?? containerId;
 
       const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === "text");
