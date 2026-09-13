@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { EmailDraft, Message, MessageChannel, MessageModality, ResearchSession, User } from "@prisma/client";
+import { EmailDraft, Message, MessageChannel, MessageModality, Prisma, ResearchSession, User } from "@prisma/client";
 import { prisma } from "../db";
 import { getAnthropicClient, CONVERSATION_MODEL } from "./anthropic";
 import { reminderTools, executeReminderTool } from "./reminderTools";
@@ -24,6 +24,10 @@ import { TurnContext } from "./toolContext";
 // notes before calling it, and it synthesizes a spoken reply on request.
 
 const HISTORY_LIMIT = 30;
+// Tool records are replayed on every later turn, so they're capped to keep
+// the history cheap. Enough to carry the outcome and the identifying fields.
+const TOOL_INPUT_CAP = 300;
+const TOOL_RESULT_CAP = 400;
 // Web search runs server-side inside a single API call, but a long search
 // can come back as pause_turn and need resuming - so the loop allows a few
 // more iterations than the custom tools alone would need.
@@ -33,6 +37,38 @@ const FALLBACK_REPLY = "Sorry, I'm having trouble connecting right now - please 
 function toolsFor(user: Pick<User, "timezone">): Anthropic.Messages.ToolUnion[] {
   return [...reminderTools, ...googleTools, ...researchTools, webSearchToolFor(user.timezone)];
 }
+
+interface ToolCallRecord {
+  name: string;
+  input: string;
+  result: string;
+}
+
+function truncate(value: string, cap: number): string {
+  return value.length > cap ? `${value.slice(0, cap)}…(truncated)` : value;
+}
+
+function recordToolCall(name: string, input: unknown, result: string): ToolCallRecord {
+  return {
+    name,
+    input: truncate(JSON.stringify(input ?? {}), TOOL_INPUT_CAP),
+    result: truncate(result, TOOL_RESULT_CAP),
+  };
+}
+
+/** Renders a turn's tool outcomes for the model's view of the history. This is
+ * never shown to the user - it's appended to the assistant turn's content only
+ * when rebuilding the prompt, so a later turn can see what actually happened
+ * rather than re-reading its own claim that it happened. */
+function renderToolRecord(toolCalls: unknown): string {
+  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return "";
+  const lines = (toolCalls as ToolCallRecord[])
+    .filter((call) => call && typeof call.name === "string")
+    .map((call) => `${call.name}(${call.input}) -> ${call.result}`);
+  return lines.length ? `\n\n<tool_record>\n${lines.join("\n")}\n</tool_record>` : "";
+}
+
+const TOOL_RECORD_RULE = `Some of your earlier turns end with a <tool_record> block. That is a factual system-written log of the tools that actually ran on that turn and exactly what they returned - it is evidence, not something you wrote. Trust it over the wording of your own earlier replies, and never apologise for or retract an earlier action that a record shows succeeded. The records are historical, though: to answer a question about what is true *now* ("is that reminder still set?", "did that send?"), call the relevant tool and answer from what it returns. If you have neither a record nor a fresh tool result, say plainly that you need to check rather than guessing either way.`;
 
 interface PromptContext {
   user: Pick<User, "name" | "timezone">;
@@ -118,6 +154,7 @@ function buildSystemPrompt(ctx: PromptContext): string {
     identity,
     "Be warm, brief, and capable - the way a genuinely excellent human PA talks, not like a chatbot.",
     "Always reply in the same language the user just wrote or spoke in, regardless of what language earlier turns were in.",
+    TOOL_RECORD_RULE,
     timezoneNote,
     `The current UTC date and time is ${nowIso}.`,
     capabilities,
@@ -170,7 +207,7 @@ export async function handleIncomingMessage(
 
   const messages: Anthropic.MessageParam[] = history.map((m) => ({
     role: m.role === "user" ? "user" : "assistant",
-    content: m.content,
+    content: m.role === "assistant" ? m.content + renderToolRecord(m.toolCalls) : m.content,
   }));
 
   const [googleConnection, pendingDrafts, latestResearch] = await Promise.all([
@@ -189,6 +226,7 @@ export async function handleIncomingMessage(
 
   const turn: TurnContext = { userId, channel };
   const tools = toolsFor(user);
+  const turnToolCalls: ToolCallRecord[] = [];
   let finalText = "";
 
   try {
@@ -250,6 +288,7 @@ export async function handleIncomingMessage(
           console.error(`Tool ${toolUse.name} failed:`, error);
           result = JSON.stringify({ ok: false, error: error instanceof Error ? error.message : "Tool failed" });
         }
+        turnToolCalls.push(recordToolCall(toolUse.name, toolUse.input, result));
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: result });
       }
       messages.push({ role: "user", content: toolResults });
@@ -282,6 +321,7 @@ export async function handleIncomingMessage(
       content: finalText,
       audioPath: assistantAudioPath,
       metadata: turn.metadata,
+      toolCalls: turnToolCalls.length ? (turnToolCalls as unknown as Prisma.InputJsonValue) : undefined,
     },
   });
 

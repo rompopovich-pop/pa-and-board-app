@@ -85,6 +85,12 @@ model Message {
   content   String
   audioPath String?         @map("audio_path")
   metadata  Json?
+  // What the tools on this turn actually did and returned. Replayed into the
+  // model's view of the history (never shown to the user) so a later turn can
+  // check what really happened instead of inferring it from its own wording -
+  // the PA otherwise reads "Done, I'll remind you" with no evidence of whether
+  // the write landed, and either over-trusts or over-retracts.
+  toolCalls Json?           @map("tool_calls")
   createdAt DateTime        @default(now()) @map("created_at")
 
   @@index([userId, createdAt])

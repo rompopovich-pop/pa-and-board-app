@@ -60,6 +60,14 @@ Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
   `update_user_profile` (name/timezone, used for onboarding a new WhatsApp
   contact). Requires `ANTHROPIC_API_KEY` — without it, the engine replies
   with a friendly fallback message rather than crashing.
+- **Tool outcomes are part of the history.** Each turn's tool calls and their
+  actual results are stored on the assistant message (`messages.tool_calls`)
+  and replayed into the model's view of the conversation as a `<tool_record>`
+  block — never shown to the user. Without it the PA re-reads its own "Done,
+  I'll remind you" with no evidence the write landed, and either over-trusts
+  it or retracts work that actually succeeded. Records are historical: the
+  system prompt tells the PA to trust them over its own prose, but to call a
+  tool when asked what is true *now*.
 - `backend/src/services/scheduler.ts` polls for due reminders and delivers
   them into the shared conversation log (plus a real WhatsApp send, if the
   reminder's channel is `whatsapp`) — so a reminder shows up in the app chat
