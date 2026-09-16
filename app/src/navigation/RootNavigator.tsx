@@ -10,7 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { LoginScreen } from "../screens/auth/LoginScreen";
 import { SignUpScreen } from "../screens/auth/SignUpScreen";
 import { PAHomeScreen } from "../screens/pa/PAHomeScreen";
-import { BoardHomeScreen } from "../screens/board/BoardHomeScreen";
+import { BoardNavigator } from "../screens/board/BoardNavigator";
 import { SettingsScreen } from "../screens/settings/SettingsScreen";
 
 export type AuthStackParamList = {
@@ -56,7 +56,7 @@ function MainNavigator() {
       })}
     >
       <MainTab.Screen name="PA" component={PAHomeScreen} options={{ title: t("nav.pa") }} />
-      <MainTab.Screen name="Board" component={BoardHomeScreen} options={{ title: t("nav.board") }} />
+      <MainTab.Screen name="Board" component={BoardNavigator} options={{ title: t("nav.board") }} />
       <MainTab.Screen name="Settings" component={SettingsScreen} options={{ title: t("nav.settings") }} />
     </MainTab.Navigator>
   );

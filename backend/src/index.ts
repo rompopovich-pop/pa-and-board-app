@@ -5,6 +5,7 @@ import authRouter from "./routes/auth";
 import paRouter from "./routes/pa";
 import oauthRouter from "./routes/oauth";
 import whatsappRouter from "./routes/whatsapp";
+import boardRouter from "./routes/board";
 import { errorHandler } from "./middleware/errorHandler";
 import { startReminderScheduler } from "./services/scheduler";
 
@@ -28,6 +29,7 @@ app.use("/auth", authRouter);
 app.use("/pa", paRouter);
 app.use("/oauth", oauthRouter);
 app.use("/webhooks/whatsapp", whatsappRouter);
+app.use("/board", boardRouter);
 
 app.use(errorHandler);
 

@@ -30,6 +30,7 @@ model User {
   oauthConnections OAuthConnection[]
   emailDrafts      EmailDraft[]
   researchSessions ResearchSession[]
+  businesses       Business[]
 
   @@map("users")
 }
@@ -101,21 +102,21 @@ model Message {
 // connection covers both Gmail and Calendar. Tokens are stored as-is for v1;
 // encrypting them at rest is an ops follow-up (spec section 10, data retention).
 model OAuthConnection {
-  id           String    @id @default(uuid())
-  userId       String    @map("user_id")
-  user         User      @relation(fields: [userId], references: [id])
-  provider     String
-  accountEmail String?   @map("account_email")
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id])
+  provider         String
+  accountEmail     String?   @map("account_email")
   // The connected calendar's own timezone, read at connect time. Kept
   // separate from users.timezone so a mismatch can be surfaced rather than
   // silently overwriting whatever the user told the PA.
-  calendarTimezone String? @map("calendar_timezone")
-  accessToken  String    @map("access_token")
-  refreshToken String?   @map("refresh_token")
-  expiresAt    DateTime? @map("expires_at")
-  scopes       String[]
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  calendarTimezone String?   @map("calendar_timezone")
+  accessToken      String    @map("access_token")
+  refreshToken     String?   @map("refresh_token")
+  expiresAt        DateTime? @map("expires_at")
+  scopes           String[]
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@unique([userId, provider])
   @@map("oauth_connections")
@@ -177,4 +178,144 @@ model Reminder {
 
   @@index([status, dueAt])
   @@map("reminders")
+}
+
+// ---------------------------------------------------------------------------
+// Business Board (business-board-spec.md section 4). Its own data model, its
+// own mode in the app; shares only auth with the PA in v1.
+// ---------------------------------------------------------------------------
+
+// The owner's raw description is kept verbatim: it is the source the board
+// was generated from, and Phase 3 refinement edits the schema relative to it.
+model Business {
+  id           String   @id @default(uuid())
+  ownerId      String   @map("owner_id")
+  owner        User     @relation(fields: [ownerId], references: [id])
+  name         String
+  description  String
+  businessType String   @map("business_type")
+  // BCP-47 tag of the language the description was written in; field
+  // labels and statuses are generated in that language (design spec
+  // section 5), so the app needs it for text direction of generated content.
+  language     String   @default("en")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  boards Board[]
+
+  @@index([ownerId])
+  @@map("businesses")
+}
+
+// `statuses` is the generated status column list: [{ key, label, tone }]
+// where `tone` is one of new / active / needs_follow_up / inactive so the
+// app can colour-code any business-specific label consistently (design spec
+// section 2, "status at a glance"). `followUpRule` is the default rule the
+// engine inferred - { days, basis, description } - stored here for Phase 2's
+// rule engine to evaluate; nothing evaluates it in Phase 1.
+model Board {
+  id               String   @id @default(uuid())
+  businessId       String   @map("business_id")
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name             String
+  clientNoun       String   @map("client_noun")
+  clientNounPlural String   @map("client_noun_plural")
+  statuses         Json
+  followUpRule     Json     @map("follow_up_rule")
+  // The engine's short explanation of what it built and why - shown once
+  // after generation, and kept as the "about this board" text.
+  summary          String
+  // What the engine assumed when the description was too vague to be sure
+  // (spec section 7, "what happens when the description is too vague").
+  assumptions      String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  fields  BoardField[]
+  clients Client[]
+
+  @@index([businessId])
+  @@map("boards")
+}
+
+enum BoardFieldType {
+  text
+  long_text
+  number
+  date
+  select
+  phone
+  email
+  checkbox
+}
+
+// One generated column of the board. Client values live in clients.fields
+// keyed by `key`; `label` is in the owner's language. Two fields exist on
+// every board regardless of business type and are marked `isSystem`: `name`
+// and `general_info` (the free-text catch-all the spec calls out in
+// section 6, Phase 1).
+model BoardField {
+  id        String         @id @default(uuid())
+  boardId   String         @map("board_id")
+  board     Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  type      BoardFieldType
+  // Choices for `select` fields; empty for every other type.
+  options   String[]
+  required  Boolean        @default(false)
+  isSystem  Boolean        @default(false) @map("is_system")
+  position  Int
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@unique([boardId, key])
+  @@index([boardId, position])
+  @@map("board_fields")
+}
+
+// The dynamic record: `fields` is JSONB keyed by board_fields.key, validated
+// and coerced against the field types on write (services/boardFields.ts).
+// `name` is mirrored out of `fields` into a real column so the list can sort
+// and search without unpacking JSON. `status` is a key from board.statuses.
+model Client {
+  id             String    @id @default(uuid())
+  boardId        String    @map("board_id")
+  board          Board     @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  name           String
+  status         String
+  fields         Json
+  // Timestamps of the most recent history entry and of the most recent
+  // logged session - what Phase 2's follow-up rule will measure against.
+  lastActivityAt DateTime? @map("last_activity_at")
+  lastSessionAt  DateTime? @map("last_session_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  activities ActivityLog[]
+
+  @@index([boardId, status])
+  @@index([boardId, name])
+  @@map("clients")
+}
+
+enum ActivityKind {
+  note
+  session
+  status_change
+  created
+  updated
+}
+
+// The chronological history log on a client record (spec section 6, Phase 1:
+// "a chronological history log, all on one screen").
+model ActivityLog {
+  id        String       @id @default(uuid())
+  clientId  String       @map("client_id")
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  kind      ActivityKind
+  text      String
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([clientId, createdAt])
+  @@map("activity_log")
 }

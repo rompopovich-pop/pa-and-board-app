@@ -3,3 +3,4 @@ export * from "./Card";
 export * from "./ConfirmationCard";
 export * from "./ScreenContainer";
 export * from "./TextField";
+export * from "./StatusChip";

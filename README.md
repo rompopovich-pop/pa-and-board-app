@@ -19,8 +19,13 @@ Sessions built so far, per `build-sequence.md`:
 - **Session 3** — PA Phase 3: web search for research and booking-assist,
   presenting 2-4 options behind the confirmation-card gate — nothing counts
   as chosen without an explicit pick, and nothing is ever booked or paid.
+- **Session 5** — Board Phase 1: the "Business Board" mode — describe your
+  business in one text box and Claude generates the board (fields, statuses,
+  a default follow-up rule), plus the dynamic client records, a list view and
+  the full client record with history log.
 
-No Business Board features are built yet.
+Session 4 (PA outreach) is specced but not built yet; nothing in the Board
+depends on it until Board Phase 4.
 
 ## Layout
 
@@ -51,6 +56,11 @@ all read/write the same conversation log the WhatsApp webhook uses.
 
 Google OAuth: `GET /oauth/google/start` and `/status`, `DELETE /oauth/google`
 (Bearer token); `GET /oauth/google/callback` is Google's redirect target.
+
+Board endpoints (Bearer token): `GET /board` (the owner's board, or `null`
+before setup), `POST /board/generate` (`{ description }` → generated board),
+`GET|POST /board/clients`, `GET|PATCH|DELETE /board/clients/:id`,
+`POST /board/clients/:id/activities` (`{ kind: "note" | "session", text }`).
 
 ## PA: conversation engine, reminders, WhatsApp
 
@@ -162,9 +172,10 @@ All colors, spacing, radii, and typography live in `app/src/theme/tokens.ts` —
 every screen consumes these tokens rather than hardcoding values, so the warm
 palette (cream background, terracotta primary accent, sage secondary) or the
 corner radius can be changed in one place. The reusable "this needs your OK"
-pattern lives in `app/src/components/ConfirmationCard.tsx` (demoed on the
-Business Board placeholder; the PA's confirmation-gated actions — email,
-bookings, outreach — land in later sessions).
+pattern lives in `app/src/components/ConfirmationCard.tsx` (email drafts,
+research options, and removing a client from the Board all use it; outreach
+lands in a later session). Board statuses use the `status*` tokens through
+`app/src/components/StatusChip.tsx`.
 
 ## i18n & RTL
 
@@ -183,8 +194,40 @@ bookings, outreach — land in later sessions).
 **Test both languages as you build new screens** — catching an RTL layout
 issue early is much cheaper than retrofitting it later (see `build-sequence.md`).
 
+## Business Board: generation + client records (Phase 1)
+
+- **Generation engine** (`backend/src/services/boardGeneration.ts`): the
+  owner's free-text description goes to Claude with a structured-output
+  schema (`messages.parse` + `zodOutputFormat`), which returns the business
+  name/type, the language of the description, a board name and client noun,
+  6-12 fields with types (text / long text / number / date / pick-one /
+  phone / email / yes-no), 3-6 statuses each tagged with a tone (new /
+  active / needs follow-up / inactive) so any label colour-codes
+  consistently, a default follow-up rule, a warm summary, and any
+  assumptions it made. Labels come back in the description's language
+  (Hebrew in, Hebrew board out). Post-processing guarantees the two fields
+  every board has — `name` and the free-text `general_info` — and stable
+  ASCII keys.
+- **Data layer** (`backend/prisma/schema.prisma`): `businesses`, `boards`
+  (statuses + follow-up rule as JSON), `board_fields`, `clients` (values as
+  JSONB keyed by field key, `name` mirrored to a column for search/sort),
+  `activity_log`. `backend/src/services/boardFields.ts` validates and
+  coerces every write against the field types and reports errors per field.
+  One board per account in v1; regenerating is allowed only while the board
+  has no clients.
+- **App** (`app/src/screens/board/`): setup (one text box → the generated
+  board explained in plain words), the client list with colour-coded status
+  chips, search and status filter, add/edit forms generated from the board's
+  fields, and the client record (status, details, general info, and the
+  history log where notes and sessions are logged). Follow-up flags are
+  Phase 2: the rule is stored but nothing evaluates it yet.
+- Tested against a therapist, a personal trainer, a Hebrew-speaking
+  hairdresser, and a vague "I run a small business" — the last gets a
+  generic starter board plus a stated list of assumptions rather than a
+  clarifying question.
+
 ## What's next
 
-Per `build-sequence.md`, Session 4 adds outreach on the user's behalf:
-approved WhatsApp templates, the outreach task state machine, and SMS
-fallback via Twilio.
+Per `build-sequence.md`, Session 4 (PA outreach: approved WhatsApp
+templates, the outreach state machine, Twilio SMS fallback) is still open,
+and Session 6 adds the Board's follow-up rule engine and in-app reminders.
