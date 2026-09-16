@@ -9,7 +9,8 @@ This covers the cross-cutting design decisions that apply to both products, sinc
 - **One shared design system** (color palette, typography, spacing, core components — buttons, cards, list items, the confirmation-card pattern) used by both products, so switching between PA mode and Board mode feels like the same app, not a context switch.
 
 ## 2. Core UX patterns
-- **Confirmation state**: a consistent, recognizable card style for anything pending the user's approval — booking options, an ambiguous email draft, an outreach request about to go out. Same pattern reused everywhere it applies across both products.
+- **Confirmation state**: a consistent, recognizable card style for anything pending the user's approval — booking options, an ambiguous email draft, an outreach request about to go out, a spreadsheet import about to create 80 clients. Same pattern reused everywhere it applies across both products.
+- **The confirmation card has to stretch to data-dense cases.** A spreadsheet import (`business-board-spec.md` section 5a) needs the same "here's what I'll do, confirm first" moment, but carrying a column→field mapping table, a row count and a duplicate count rather than two lines of prose. It should read as unmistakably the *same* pattern — the attention-colored accent, the rounded card, the confirm/cancel pair — with a denser body: the mapping as a compact two-column list, the columns the engine is unsure about pulled to the top where they need a decision, the confident ones below and collapsible. Resist the urge to build a separate "import wizard" screen; the moment the user is being asked to approve something, it should look like every other time they've been asked to approve something.
 - **Status at a glance**: on the Board, status (new / active / needs follow-up / inactive) should be visually scannable — color-coded, not just a text label — since the whole point is a business owner glancing at it and knowing who needs attention.
 - **Voice as a first-class input**, not an afterthought — a mic button with the same visual weight as the text field on the PA's chat screen, not buried in a menu.
 - **Low-friction onboarding for both**: the PA's setup is a short conversation, not a form; the Board's setup is one text box ("describe your business") — both should get to a working, useful state in under a minute.
@@ -58,12 +59,43 @@ Every UI string, every AI-facing prompt instruction, and every WhatsApp template
 **WhatsApp template localization**
 - One detail specific to the PA's outreach feature: Meta requires **message templates to be approved per language**. If the PA is going to text a Hebrew-speaking barbershop in Hebrew and an English-speaking one in English, you need separate approved template variants for each supported language, submitted up front. Worth deciding your initial language set (e.g. English + Hebrew for launch) before submitting templates, since each variant needs its own approval.
 
+## 5a. Paywalls, limits and upgrade — warm applies to money too
+
+Plans, limits and billing mechanics are specified in `payments-spec.md`. This section is only about how any of it is allowed to look and feel.
+
+**The hard rule: "warm, not corporate" does not get suspended when we ask for money.** Paywall UI is where products reach for urgency countdowns, pre-ticked annual plans, a greyed-out "no thanks" in 11px, and a cancel flow buried three taps deep. All of that is off the table here. The product is standing in for a human assistant; an assistant who nagged about money the way most apps do would be fired.
+
+Concretely:
+
+- **Upgrade screens use the ordinary design system** — the same cards, the same rounded corners, the same palette, the same typography. A plan comparison is a set of cards, not a pricing table borrowed from a SaaS landing page.
+- **The accent color is for the recommended plan, not for pressure.** No red urgency, no flashing, no countdowns.
+- **Declining is as easy as accepting.** "Not now" is a real button with real contrast, sitting beside the upgrade button — not a grey link under the fold.
+- **Cancellation lives where subscription lives.** Settings → Subscription, reachable in the same number of taps as subscribing was. Stripe's Customer Portal handles the mechanics (`payments-spec.md` section 5); don't build a retention gauntlet in front of it.
+
+**Approaching a limit is information, not a threat.** Show usage where the usage happens — a quiet line on the Board list ("18 of 20 clients"), a note in PA settings — in secondary text, not the attention color. Only when a limit is actually reached does it warrant the confirmation-card treatment, and even then the tone is the PA's usual one: *"That's your 30 messages for this month — want to carry on with more?"* Not *"LIMIT REACHED. UPGRADE NOW."*
+
+**At-limit states must never look like data loss.** Per `payments-spec.md` section 3, exceeding a limit degrades to read-only and never deletes. The UI has to make that obvious at a glance, because a user who *believes* their clients are gone has been harmed just as much as one whose clients actually are. Show the existing data normally; put the gentle upgrade prompt on the action that's blocked, not over the content.
+
+**Copy stays first-person and warm**, like everywhere else: *"You're on the free plan — happy to keep going, just letting you know where you are"* rather than *"Your account has exceeded its allocation."*
+
+### Localizing money
+
+- **Price formatting is locale-aware**, not string-concatenated: `Intl.NumberFormat` with the currency, so the symbol, separators and placement follow the locale rather than hardcoded `"£" + amount`.
+- **Currency placement flips under RTL.** A GBP price in a Hebrew layout does not simply mirror; get this from the formatter and check it visually, the same way every other RTL layout gets checked (section 5).
+- **Digits in Hebrew**: Hebrew uses Western Arabic numerals, so prices read left-to-right *inside* a right-to-left line. This is a classic place for bidirectional text to render wrongly — worth an explicit look on a real device.
+- **VAT display** has legal weight for UK consumers, and whether prices show inclusive or exclusive of VAT is a decision, not a formatting preference (`payments-spec.md` section 7).
+- **One currency or many.** GBP-only is the simple v1. If a Hebrew-speaking user sees GBP, that's friction worth being deliberate about rather than discovering later.
+
 ## 6. Design tokens — built for easy redesign later
 
 Every color, spacing value, and corner radius in the app should be a **named token** (e.g. `--surface-1`, `--text-accent`, `--radius`), defined once in a single theme file, and every screen should reference the token, never a hardcoded value. This is what the mockups shared during design discussions already do — colors like `var(--bg-accent)` or `var(--text-secondary)` rather than specific hex codes.
 
 Why this matters concretely: if the warm & personal accent color needs to shift from coral to sage six months from now, or the corner radius needs to go rounder, that's a one-line edit in the theme file that updates every screen at once — not a hunt through dozens of components changing hardcoded values one by one. Have Claude Code set this theme file up in Session 0 (the shared foundation session) as the actual source of truth, and treat every subsequent screen as consuming it, not defining its own colors. This is standard practice, but worth stating explicitly as a build requirement rather than assuming it'll happen by default.
 
+Two token additions this implies, kept in the same theme file as everything else: a **success/positive** color distinct from the sage accent (for "you're subscribed", import completed), and a **neutral/disabled surface** for locked or at-limit states that reads as "not available on your plan" rather than "broken".
+
 ## 7. Remaining open decisions
 - **Adding a third language later (e.g. Spanish)** — not needed for launch, but since the i18n/RTL foundation is being built correctly from Phase 1, adding a language after launch should mainly be translation work, not architecture work.
 - **Exact accent color(s)** within the warm palette (terracotta vs coral vs sage as the primary action color) — worth a quick visual mockup pass once Claude Code has a basic screen up, rather than deciding in the abstract.
+- **Where the upgrade prompt lives when a limit is hit mid-conversation.** The PA hitting its monthly message cap mid-thread is the awkward case: a paywall card in the chat thread is jarring, but a silent stop is worse. Probably a confirmation-card-styled message from the PA itself, in its own voice — worth prototyping before committing.
+- **Whether the paywall is ever shown in Hebrew with GBP prices**, or whether localized pricing arrives before a Hebrew launch (see section 5a and `payments-spec.md` section 4).

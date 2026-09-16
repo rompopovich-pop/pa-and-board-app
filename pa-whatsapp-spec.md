@@ -1,6 +1,6 @@
 # WhatsApp + App PA — v1 Product & Technical Spec
 
-*Design, UX, and localization requirements (including multi-language and RTL support) are covered separately in `design-ux-localization-spec.md` — apply those alongside this doc.*
+*Design, UX, and localization requirements (including multi-language and RTL support) are covered separately in `design-ux-localization-spec.md` — apply those alongside this doc. Plans, free-tier limits and billing are in `payments-spec.md`; the PA's free-tier limits are in its section 3.*
 
 ## 1. Vision
 A personal assistant, reachable through **both** a native app (iOS/Android) and WhatsApp, that behaves like a warm, capable human PA — by text and by voice. It:
@@ -119,6 +119,8 @@ The dividing line: if the PA has to *decide what to say*, it drafts. If the user
 - Web search integration for flights, restaurants, general research.
 - "Present options, wait for explicit confirmation" flow — never finalizes anything transactional.
 
+*Every phase below is metered — see `payments-spec.md` section 3 for which actions count against a free-tier limit, and section 6 for where the counters get incremented. The metering work itself is sequenced separately in `build-sequence.md`; build each phase as though it were unmetered and let that session add the counters.*
+
 **Phase 4 — Outreach on your behalf**
 - Approved WhatsApp templates for contacting third parties.
 - Outreach task state machine: template sent → waiting for reply → negotiating → resolved/failed → reported back to user.
@@ -144,7 +146,7 @@ The dividing line: if the PA has to *decide what to say*, it drafts. If the user
 - Hosting: Railway/Render/Fly.io is enough for v1.
 
 ## 10. Open decisions still worth making
-- **Business model**: free tier vs paid, and how you absorb per-conversation WhatsApp costs plus voice API costs.
+- ~~**Business model**: free tier vs paid~~ — **decided**: three plans (PA, Board, Bundle), each with a free tier capped by usage, billed through Stripe. See `payments-spec.md`. How the per-conversation WhatsApp cost and the voice API cost get absorbed is answered there by which limits sit on the free tier: spoken replies and outreach are paid-only precisely because they are the two most expensive units in the product.
 - **Template copy**: exact outreach template wording to submit to Meta (submit early — approval has lead time).
 - **"Unambiguous" criteria for auto-sending email** — worth writing a few concrete examples before build so the rule is testable.
 - **Outreach guardrails**: tone/negotiating room the PA has when contacting someone on your behalf.
