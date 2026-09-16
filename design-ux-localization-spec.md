@@ -70,7 +70,7 @@ Concretely:
 - **Upgrade screens use the ordinary design system** — the same cards, the same rounded corners, the same palette, the same typography. A plan comparison is a set of cards, not a pricing table borrowed from a SaaS landing page.
 - **The accent color is for the recommended plan, not for pressure.** No red urgency, no flashing, no countdowns.
 - **Declining is as easy as accepting.** "Not now" is a real button with real contrast, sitting beside the upgrade button — not a grey link under the fold.
-- **Cancellation lives where subscription lives.** Settings → Subscription, reachable in the same number of taps as subscribing was. Stripe's Customer Portal handles the mechanics (`payments-spec.md` section 5); don't build a retention gauntlet in front of it.
+- **Cancellation lives where subscription lives.** Settings → Subscription, reachable in the same number of taps as subscribing was. With in-app purchase the mechanics belong to the platform: deep-link to the iOS or Android subscription settings rather than building a cancel flow, and don't put a retention gauntlet in front of the link. Be straightforward that managing or cancelling happens in the store — a user hunting for a cancel button we don't have is a worse experience than one sentence telling them where it lives.
 
 **Approaching a limit is information, not a threat.** Show usage where the usage happens — a quiet line on the Board list ("18 of 20 clients"), a note in PA settings — in secondary text, not the attention color. Only when a limit is actually reached does it warrant the confirmation-card treatment, and even then the tone is the PA's usual one: *"That's your 30 messages for this month — want to carry on with more?"* Not *"LIMIT REACHED. UPGRADE NOW."*
 
@@ -78,13 +78,27 @@ Concretely:
 
 **Copy stays first-person and warm**, like everywhere else: *"You're on the free plan — happy to keep going, just letting you know where you are"* rather than *"Your account has exceeded its allocation."*
 
+### What the stores require on the paywall
+
+Selling through in-app purchase (`payments-spec.md`) adds requirements that are **review-blocking, not stylistic** — an app can be rejected for missing them. They're listed here rather than in the payments spec because they're all things the paywall screen has to show:
+
+- **Price, billing period, and that it renews automatically**, stated plainly next to the purchase button — not in a footnote.
+- **A visible "Restore purchases" action.** Apple requires it, and a user reinstalling or moving to a new device genuinely needs it.
+- **Links to Terms of Service and Privacy Policy** from the paywall itself.
+- **Prices come from the store, never hardcoded.** Fetch them from the current RevenueCat Offering so each storefront shows its own localized, tax-inclusive price. A hardcoded "£4.99" is wrong for most of the world and will eventually be wrong at home too.
+
+None of this conflicts with the warm direction — it just means the honest facts sit *in* the card rather than behind a disclosure link. Say them the way a decent person would: *"£X a month, renews until you cancel — you can cancel any time in your iPhone settings."*
+
+Because prices arrive from the store already localized and tax-inclusive, most of the money-localization work below is handled for us. Render what the store hands back; don't reformat it.
+
 ### Localizing money
 
-- **Price formatting is locale-aware**, not string-concatenated: `Intl.NumberFormat` with the currency, so the symbol, separators and placement follow the locale rather than hardcoded `"£" + amount`.
-- **Currency placement flips under RTL.** A GBP price in a Hebrew layout does not simply mirror; get this from the formatter and check it visually, the same way every other RTL layout gets checked (section 5).
-- **Digits in Hebrew**: Hebrew uses Western Arabic numerals, so prices read left-to-right *inside* a right-to-left line. This is a classic place for bidirectional text to render wrongly — worth an explicit look on a real device.
-- **VAT display** has legal weight for UK consumers, and whether prices show inclusive or exclusive of VAT is a decision, not a formatting preference (`payments-spec.md` section 7).
-- **One currency or many.** GBP-only is the simple v1. If a Hebrew-speaking user sees GBP, that's friction worth being deliberate about rather than discovering later.
+Going through the stores removes most of this problem — what's left is display, not calculation:
+
+- **Use the store's formatted price string as given.** RevenueCat exposes each price already formatted for the storefront (symbol, separators, placement). Re-formatting it yourself, with `Intl.NumberFormat` or otherwise, can only make it wrong.
+- **Currency and tax handling is the platform's**: users see their own currency, tax-inclusive, because Apple and Google are the merchant of record (`payments-spec.md` section 7). The old "GBP-only or localized?" question and the VAT inclusive/exclusive decision both disappear with it.
+- **Bidirectional text is still ours to get right.** Hebrew uses Western Arabic numerals, so a price reads left-to-right *inside* a right-to-left line, and the currency symbol sits on the side the locale expects. This is a classic place for bidi rendering to go wrong — check it on a real device, the same way every other RTL layout gets checked (section 5).
+- **Leave room for the string to change size.** "£4.99" and a longer localized equivalent are very different widths; a paywall laid out tightly around a short GBP price will break in other storefronts.
 
 ## 6. Design tokens — built for easy redesign later
 
@@ -98,4 +112,4 @@ Two token additions this implies, kept in the same theme file as everything else
 - **Adding a third language later (e.g. Spanish)** — not needed for launch, but since the i18n/RTL foundation is being built correctly from Phase 1, adding a language after launch should mainly be translation work, not architecture work.
 - **Exact accent color(s)** within the warm palette (terracotta vs coral vs sage as the primary action color) — worth a quick visual mockup pass once Claude Code has a basic screen up, rather than deciding in the abstract.
 - **Where the upgrade prompt lives when a limit is hit mid-conversation.** The PA hitting its monthly message cap mid-thread is the awkward case: a paywall card in the chat thread is jarring, but a silent stop is worse. Probably a confirmation-card-styled message from the PA itself, in its own voice — worth prototyping before committing.
-- **Whether the paywall is ever shown in Hebrew with GBP prices**, or whether localized pricing arrives before a Hebrew launch (see section 5a and `payments-spec.md` section 4).
+- **How much the paywall leans on RevenueCat's own paywall tooling** versus being built from our components. Their hosted paywalls are quicker and remotely updatable; ours guarantees the warm design system carries through. Leaning custom is the default here, given how much of this spec is about not looking like every other subscription app.

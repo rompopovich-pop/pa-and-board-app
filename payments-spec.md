@@ -1,43 +1,48 @@
 # Payments, Plans & Entitlements — shared spec
 
-*Cross-cutting, like `design-ux-localization-spec.md`: payments belong to neither product on their own. Per-product free-tier limits live here; the UI for paywalls, usage meters and upgrade flows is specified in `design-ux-localization-spec.md` section 8.*
+*Cross-cutting, like `design-ux-localization-spec.md`: payments belong to neither product on their own. Per-product free-tier limits live here; the UI for paywalls, usage meters and upgrade flows is specified in `design-ux-localization-spec.md` section 5a.*
 
 ## 1. What's decided
 
-- **Processor**: Stripe. Rom registers as a **UK business**; payouts to a **UK bank account**; base currency **GBP**.
+- **Native in-app purchase**, on both platforms — StoreKit on iOS, Play Billing on Android. Users buy inside the app with the payment method already on their device. **No web checkout in v1.**
+- **RevenueCat** wraps both stores behind one interface, and handles receipt validation, entitlement state, cross-platform restore and webhooks. We do not write raw StoreKit or Play Billing code.
 - **Three subscription plans**: **PA**, **Board**, and **Bundle** (both products, priced below the sum of the two).
-- **Free tier on every plan**, with usage limits. Paid unlocks full features.
+- **Free tier on every plan**, with usage limits (section 3, approved). Paid unlocks full features.
+- **Apple Small Business Program assumed** — the reduced commission rate for small developers.
 - **The free tier is a real product, not a crippled demo.** Someone should be able to use it indefinitely and find it genuinely useful — the limits exist to cap our marginal costs, not to force a purchase.
+- Rom's **UK business** and **UK bank account** still matter, but for receiving store payouts rather than for running a payment processor (section 7).
 
-## 2. ⚠️ Decide before building: app-store billing rules
+> **On rates and terms below:** platform commission structures, program thresholds and RevenueCat's pricing all change, and some are under active regulatory pressure in the UK and EU. Every number in this document is "as understood when written" — confirm against Apple, Google and RevenueCat's current published terms before relying on any of it commercially.
 
-**This is the highest-risk open item in this spec, and it can invalidate the Stripe-only approach for the native apps.**
+## 2. Why in-app purchase, and what it costs us
 
-Apple (App Store Review Guideline 3.1.1) and Google Play have historically required digital subscriptions that unlock in-app functionality to be sold through **In-App Purchase**, taking a 15–30% cut — not through a third-party processor like Stripe. Carve-outs exist and are actively changing (external-purchase-link entitlements, regional regulatory rulings, "reader app" exceptions), and the rules differ by jurisdiction.
+**The decision is user experience.** A native purchase sheet — Face ID, the card already on file, no browser hop, no re-entering details — converts better and feels like part of the app. A web checkout, even a good one, means bouncing the user out to Safari mid-flow. For a product whose whole premise is "warm, feels like a person", that hop is off-brand.
 
-**Do not treat any summary of these rules — including this paragraph — as current.** Verify against Apple's and Google's live policy, for the UK specifically, before committing. This affects three things at once:
+It also removes the compliance question entirely. Apple and Google generally require IAP for digital subscriptions that unlock in-app functionality; selling this through an external processor risks rejection. Going native means we're on the default-approved path rather than navigating carve-outs that shift with each policy update and court ruling.
 
-1. **Whether the native apps can ship with a Stripe paywall at all.**
-2. **The data model** — if both IAP and Stripe can create a subscription, entitlements must record *which source* granted them, and reconcile two systems of record.
-3. **Unit economics** — a 15–30% platform cut changes what the plans have to cost.
+**What it costs, recorded honestly so nobody is surprised later:**
 
-Three viable shapes, in rough order of compliance-safety:
+| Cost | Detail |
+|---|---|
+| **Commission** | ~15% under Apple's Small Business Program and Google's reduced/subscription rate, versus roughly 3% for a card processor. That is the price of the smoother flow. |
+| **No web purchase path** | If a desktop or web signup ever matters, that's a second billing integration, not a config change. |
+| **Slower pricing changes** | Prices come from store price points and changes go through the store, so pricing experiments are slower than flipping a value in a dashboard. |
+| **Refunds aren't ours** | Apple and Google own refunds. We can't issue one for a frustrated user; we can only see that it happened. Support replies need to say so kindly. |
+| **Native builds required to test** | See section 8 — this one has an immediate effect on how the app is built and tested. |
 
-| Option | Shape | Cost |
-|---|---|---|
-| **A. Dual billing** | IAP on iOS/Android, Stripe on web | Most compliant, most work, platform cut on mobile |
-| **B. Stripe-only, web checkout** | Subscribe on the web; app reflects entitlement | Simplest to build; needs an approved external-link route or it risks rejection |
-| **C. Web-first** | Validate willingness-to-pay on web/PWA, add native IAP later | Defers the decision; delays native launch |
+### Commission structure
 
-**Recommendation: settle this before Session 10** (see `build-sequence.md`). Like the Meta template approval and the App Store developer accounts, it has real-world lead time and is not a coding problem.
+- **Apple**: the standard rate applies by default; the **Small Business Program** reduces it to the lower tier for developers under the annual revenue threshold. Enrollment is **an application, not automatic**, and status is reviewed annually — so it needs doing, and re-checking each year.
+- **Google Play**: a reduced rate applies to the first tranche of annual earnings, and **subscriptions carry the lower rate** rather than the standard one. Broadly comparable to Apple's small-business rate for a product at this stage.
+- Both platforms have faced regulatory change in the UK and EU that may alter these terms — worth a check before modelling margins.
 
-## 3. Draft free-tier limits — for Rom to approve or adjust
+## 3. Free-tier limits — **approved**
 
-**These numbers are a starting point, not a decision.** They are set from one principle: **cap what costs us real money per use; be generous with what is essentially free.** Every PA reply costs Claude API tokens; every voice note costs speech-to-text and speech synthesis; every WhatsApp conversation and outreach SMS costs money per unit. Storage of clients, notes and history costs approximately nothing — so being stingy there would make the free tier feel mean without saving anything.
+Approved as drafted. The principle behind them: **cap what costs us real money per use; be generous with what is essentially free.** Every PA reply costs Claude API tokens; every voice note costs speech-to-text and speech synthesis; every WhatsApp conversation and outreach SMS costs money per unit. Storage of clients, notes and history costs approximately nothing — so being stingy there would make the free tier feel mean without saving anything.
 
 ### PA — free tier
 
-| Limit | Draft value | Why |
+| Limit | Value | Why |
 |---|---|---|
 | Assistant replies / month | **30** | Combined across app + WhatsApp. The main LLM cost driver. |
 | Active reminders at once | **5** | Not a cost driver; a shape driver — enough to feel real, not enough to run a life on. |
@@ -50,7 +55,7 @@ Three viable shapes, in rough order of compliance-safety:
 
 ### Board — free tier
 
-| Limit | Draft value | Why |
+| Limit | Value | Why |
 |---|---|---|
 | Boards | **1** | Multi-board is a power-user need (see `business-board-spec.md` section 7). |
 | Clients | **20** | The value metric. Enough to run a genuinely small practice. |
@@ -70,51 +75,73 @@ Both free tiers as above, concurrently. The Bundle's value is in the paid tier, 
 
 **Never hold their data hostage.** Exceeding a limit — including after a subscription lapses — degrades to **read-only, never deletion and never lock-out**. Existing clients stay visible and editable; adding the 21st prompts an upgrade. A user who cancels can still read everything they put in. This is a product commitment, not a nice-to-have, and it should survive any re-tuning of the numbers above.
 
-## 4. Pricing
+## 4. Pricing and store product setup
 
-Deliberately not fixed here — it's Rom's commercial call. Two structural points worth deciding alongside it:
+**Prices come from store price points**, not arbitrary amounts — pick the nearest tier rather than designing around a specific figure. Both stores **localize price automatically** for each storefront, which quietly resolves the old "GBP-only or localized?" question: set the GBP price, and other territories get a converted, tax-inclusive equivalent without extra work.
 
-- **The Bundle must cost less than PA + Board separately**, or it isn't a bundle.
-- **Monthly and annual** prices per plan (annual usually 2 months free) — decide whether annual ships in v1 or later, since it doubles the Price objects and the upgrade/downgrade paths to test.
-- **Single currency (GBP) or localised pricing?** GBP-only is far simpler for v1. Hebrew-speaking users seeing GBP is a friction point worth naming, not a blocker. See `design-ux-localization-spec.md` section 8 for how price is displayed.
+**Subscription groups matter more here than plan names do.** On Apple, put **PA, Board and Bundle in a single subscription group**. Within a group a user holds exactly one subscription at a time, and Apple handles upgrades, downgrades and crossgrades — including proration — for free. That is precisely the shape we want: Bundle *replaces* the individual plans rather than stacking with them, and someone moving from PA to Bundle is an upgrade Apple manages. Mirror this on Google Play using one subscription with base plans, or parallel products in equivalent arrangement.
 
-## 5. Stripe integration
+A consequence worth stating: **a user cannot hold PA and Board as two separate subscriptions.** Wanting both means buying Bundle. If that's ever wrong commercially, it needs separate subscription groups and the smooth upgrade path is lost — so it's a decision, not an implementation detail.
 
-**Objects.** One Stripe **Product** per plan (PA, Board, Bundle); one **Price** per product per billing interval, in GBP. Free tier is *not* a Stripe object — it's the absence of an active subscription.
+Still to decide: **the actual prices**, and whether **annual** ships alongside monthly in v1 (annual doubles the products to configure and the upgrade paths to test). The Bundle must cost less than PA + Board separately, or it isn't a bundle.
 
-**Checkout.** Use **Stripe Checkout** (hosted) rather than a bespoke card form for v1: it keeps PCI scope minimal and handles **SCA / 3-D Secure**, which is mandatory for UK and EU cardholders. Use the **Customer Portal** for plan changes, payment-method updates and cancellation — that removes an entire screen's worth of billing UI we'd otherwise build and maintain.
+**Introductory offers** — free trials, intro pricing — are first-class on both stores and configured there rather than in our code. That makes the "trial or no trial" question cheaper to answer than it would have been with a processor (section 9).
 
-**Entitlements are derived, cached, and never trusted from the client.** The backend owns the mapping from Stripe subscription state to what a user can do. The app asks the backend what it's entitled to; it never decides for itself, and a client claiming "I'm on Bundle" means nothing.
+## 5. RevenueCat integration
 
-**Webhooks** drive entitlement changes. At minimum: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.paid`. Verify the **webhook signature** on every request — the same discipline already applied to the WhatsApp `X-Hub-Signature-256` webhook — and make handlers **idempotent**, since Stripe retries and delivers out of order.
+**Why RevenueCat rather than raw StoreKit / Play Billing:** one SDK and one entitlement model across both platforms, server-side receipt validation we don't have to write or keep correct as receipt formats change, cross-platform restore, and webhooks that turn purchase events into something our backend can act on. The alternative is maintaining two native billing integrations and a receipt-validation service — a large amount of subtle, security-sensitive work that is not this product's differentiator.
 
-**Dunning.** `invoice.payment_failed` should not instantly revoke access. Stripe's Smart Retries plus a grace period (suggest 7 days), with a warm in-app notice, then read-only per section 3.
+**Shape of it:**
 
-**Testing.** Stripe test mode plus the Stripe CLI for local webhook forwarding. Build against test mode throughout; live keys are a deployment concern, not a development one.
+- **Products** configured in App Store Connect and Play Console, then mapped in RevenueCat to **Offerings** (what the paywall shows) and **Entitlements** (what access a purchase grants). Suggest three entitlements: `pa`, `board`, and Bundle granting **both**, so entitlement checks stay per-product rather than per-plan.
+- **App side**: `react-native-purchases` (RevenueCat's React Native SDK). It fetches the current Offering to render the paywall, runs the purchase, and exposes the customer's entitlements. **Identify the user to RevenueCat with our own user ID** (`logIn`) on sign-in, so entitlements follow the account across devices and platforms rather than being stranded on one install.
+- **Server side**: **RevenueCat webhooks** are the source of truth for our backend. On purchase, renewal, cancellation, billing issue, refund or product change, RevenueCat posts to us and we update the `subscriptions` row and recompute entitlements. **Verify the webhook's authorization header** — the same discipline already applied to the WhatsApp `X-Hub-Signature-256` webhook — and make handlers **idempotent**, since webhooks retry and can arrive out of order.
+
+**Server-side entitlement enforcement is not optional here, and this product has a specific reason.** The PA is reachable over **WhatsApp, where there is no app and no SDK** — a user messaging the business number has no client to check. Entitlements therefore have to be resolvable from our own database for a phone number with no app session at all. The client SDK is for *rendering* the paywall; the backend decides what actually runs. A client claiming "I'm on Bundle" means nothing.
+
+**Billing issues get a grace period, not an instant cut-off.** Both stores support billing-retry and grace-period settings — configure them in App Store Connect and Play Console rather than in code — and treat a user in grace as still entitled, with a warm in-app notice. Only once the store reports the subscription actually lapsed does section 3's read-only state apply.
+
+**Restore purchases must exist.** Apple requires a way for a user to restore previous purchases (reinstall, new device). RevenueCat's `restorePurchases` covers it; the paywall needs the button (`design-ux-localization-spec.md` section 5a).
 
 ## 6. Data model additions
 
-- `subscriptions` — user_id, plan (`pa` / `board` / `bundle`), status (`active` / `trialing` / `past_due` / `canceled`), source (`stripe` / `apple` / `google` — see section 2), stripe_customer_id, stripe_subscription_id, current_period_end, cancel_at_period_end
+- `subscriptions` — user_id, plan (`pa` / `board` / `bundle`), status (`active` / `in_grace_period` / `expired` / `canceled`), store (`app_store` / `play_store`), revenuecat_customer_id, product_id, current_period_end, will_renew
 - `usage_counters` — user_id, metric (e.g. `pa_replies`, `voice_notes_in`, `email_sends`, `research_sets`, `board_refinements`, `quick_captures`), period_start, count — one row per user per metric per billing month
-- `entitlements` — derived, not stored as truth; computed from `subscriptions` + `usage_counters` and cached. Keeping this *derived* means a plan change or a Stripe correction never leaves a stale grant behind.
+- `entitlements` — derived, not stored as truth; computed from `subscriptions` + `usage_counters` and cached. Keeping this *derived* means a plan change, a refund or a store correction never leaves a stale grant behind.
+
+Keeping `store` on the subscription row costs nothing now and matters later: it's what makes a web/Stripe path addable without a migration, and it's what support needs in order to tell a user *where* to cancel — since we can't do it for them.
 
 **Metering is cross-cutting.** Every metered action needs a counter increment at the point the cost is incurred — inside the conversation engine, the voice pipeline, the Google tools, the research tools, the Board generation engine. This is the single most invasive part of the payments work, which is why `build-sequence.md` gives it its own session rather than bolting it onto the paywall UI.
 
 ## 7. UK business & tax
 
-Real-world items with lead time, independent of code:
+**Going native simplifies this substantially.** In the UK, the EU and most major markets, **Apple and Google act as merchant of record**: they sell to the customer, and they collect and remit the VAT. That removes the tax-calculation integration, the digital-services VAT registration question for those sales, and the inclusive-versus-exclusive display decision — store prices are shown tax-inclusive by the platform.
 
-- **Stripe account** in the UK business's name, verified (company details, directors, bank account). Start this early — verification is not instant.
-- **VAT.** Selling digital services to consumers has its own VAT rules; UK registration becomes mandatory above the registration threshold, and sales into the EU have their own treatment. **Stripe Tax** can calculate and collect this, but somebody has to decide registration status and switch it on. Check current thresholds and rules with an accountant rather than from this document.
-- **Prices inclusive or exclusive of VAT** — a display decision with legal weight for UK consumers (see `design-ux-localization-spec.md` section 8).
-- **Payouts**: UK bank account, Stripe's default rolling schedule.
-- **Terms of service, refund and cancellation policy** — required by Stripe, and by UK consumer law for digital subscriptions.
+What still needs doing, none of it code:
 
-## 8. Open decisions
+- **App Store Connect and Google Play Console accounts** for the UK business, with **banking and tax forms completed**. Payouts don't flow until these are in place, and they take time.
+- **Apple Small Business Program enrollment** — an application with an annual review, not an automatic rate (section 2).
+- **Corporation tax and accounting** on the payouts received. Platform payouts arrive net of commission and on the stores' own schedules, which differ from each other; the bookkeeping is not the same shape as processor payouts.
+- **Terms of service, refund and cancellation policy** — still required, and the refund policy must be honest that refunds are handled by Apple or Google rather than by us.
+- **Confirm merchant-of-record treatment for every territory you actually sell in.** It is the norm in the markets that matter here, but it isn't universal, and "Apple handles all our VAT everywhere" is the kind of assumption that is cheap to check and expensive to get wrong.
 
-- **Section 2's app-store question** — the one that blocks the most.
-- **Exact prices** per plan and interval, and whether annual ships in v1.
-- **Free-tier numbers in section 3** — Rom to approve or adjust.
-- **Trial or no trial.** A 7- or 14-day full-feature trial converts better than a limited free tier for some products, and cannibalises it for others. The two can coexist but the interaction needs deciding.
+## 8. Testing and build implications
+
+**This changes how the app is built, starting before the payments session.** The IAP native module cannot run in Expo Go — the current web-export-and-screenshot workflow used through Sessions 0-3 cannot exercise a purchase at all. Specifically:
+
+- The app needs a **development build** (`expo-dev-client`) or EAS builds, with `react-native-purchases` in the native layer.
+- **iOS**: StoreKit configuration files allow local testing in the simulator without App Store Connect round-trips; sandbox Apple IDs cover the fuller flow on device.
+- **Android**: licence testers plus an internal testing track; purchases need a signed build uploaded to Play.
+- **Neither store's purchase flow can be tested on the web build**, so paywall *layout* can be checked in the existing web workflow, but purchase, restore, upgrade and lapse paths need real devices.
+
+Worth standing this up early — a store account that isn't ready, or a dev build that won't compile with the native module, blocks the payments sessions completely.
+
+## 9. Open decisions
+
+- **Exact prices** per plan, which store price tier, and whether **annual** ships in v1.
+- **Trial or intro offer?** Now cheap to configure on both stores. A free trial converts better than a limited free tier for some products and cannibalises it for others — and we have both, so the interaction needs deciding rather than defaulting.
+- **Can a user ever hold PA and Board separately** rather than buying Bundle? Section 4 assumes not, which is what buys the smooth Apple-managed upgrade path.
+- **Family Sharing** (Apple) — supported per-product; decide whether a Bundle should be shareable.
 - **What happens to a Bundle subscriber who downgrades to one product** while holding data in the other — read-only per section 3, presumably, but worth confirming.
-- **Per-seat or per-account?** Assumed per-account for v1; a therapist with an assistant is a plausible near-term exception.
+- **Per-seat or per-account?** Assumed per-account for v1; a therapist with an assistant is a plausible near-term exception, and IAP makes multi-seat harder than a processor would.
+- **Whether a web/Stripe path is ever wanted** for desktop signup or for markets where store economics are poor. Not v1; the `store` column in section 6 keeps the door open.

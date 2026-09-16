@@ -146,7 +146,7 @@ The dividing line: if the PA has to *decide what to say*, it drafts. If the user
 - Hosting: Railway/Render/Fly.io is enough for v1.
 
 ## 10. Open decisions still worth making
-- ~~**Business model**: free tier vs paid~~ — **decided**: three plans (PA, Board, Bundle), each with a free tier capped by usage, billed through Stripe. See `payments-spec.md`. How the per-conversation WhatsApp cost and the voice API cost get absorbed is answered there by which limits sit on the free tier: spoken replies and outreach are paid-only precisely because they are the two most expensive units in the product.
+- ~~**Business model**: free tier vs paid~~ — **decided**: three plans (PA, Board, Bundle), each with a free tier capped by usage, sold as native in-app purchases via RevenueCat. See `payments-spec.md`. How the per-conversation WhatsApp cost and the voice API cost get absorbed is answered there by which limits sit on the free tier: spoken replies and outreach are paid-only precisely because they are the two most expensive units in the product. Note that a WhatsApp user has no app session, so entitlements must be resolvable server-side from a phone number alone — see `payments-spec.md` section 5.
 - **Template copy**: exact outreach template wording to submit to Meta (submit early — approval has lead time).
 - **"Unambiguous" criteria for auto-sending email** — worth writing a few concrete examples before build so the rule is testable.
 - **Outreach guardrails**: tone/negotiating room the PA has when contacting someone on your behalf.
