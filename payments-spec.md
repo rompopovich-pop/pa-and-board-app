@@ -8,6 +8,7 @@
 - **RevenueCat** wraps both stores behind one interface, and handles receipt validation, entitlement state, cross-platform restore and webhooks. We do not write raw StoreKit or Play Billing code.
 - **Three subscription plans**: **PA**, **Board**, and **Bundle** (both products). **Prices are final** — section 4.
 - **Monthly and annual both ship in v1.**
+- **Prices are defined in USD only.** The further intent — that *every* user sees USD wherever they are — is incompatible with native in-app purchase, which always presents local currency. That conflict is unresolved and decides the payment rail: section 4, *Currency*.
 - **Plan decides which tabs exist**, asymmetrically and on purpose: a PA subscriber has no Board tab at all, while a Board subscriber does see the PA tab. Section 4a.
 - **The Board's upsell to the PA is contextual, never a banner.** It fires on a real thing the owner just tried to do for a named client. Section 4a is the detailed spec for it, and it is the main acquisition path for PA subscriptions.
 - **Free tier on every plan**, with usage limits (section 3, approved). Paid unlocks full features.
@@ -80,7 +81,7 @@ Both free tiers as above, concurrently. The Bundle's value is in the paid tier, 
 
 ## 4. Pricing and store product setup
 
-**Prices come from store price points**, not arbitrary amounts — pick the nearest tier rather than designing around a specific figure. Both stores **localize price automatically** for each storefront, which quietly resolves the old "GBP-only or localized?" question: set the price in one anchor currency and other territories get a converted, tax-inclusive equivalent without extra work. Which currency anchors it is still open (section 9), since the figures below are in USD while the business is UK-based.
+**Under in-app purchase, prices come from store price points**, not arbitrary amounts — pick the nearest tier rather than designing around a specific figure. Both stores **localize price automatically** for each storefront: set the USD base price and other territories get a converted, tax-inclusive equivalent without extra work. That resolves the old "GBP-only or localized?" question, but it also collides with the USD-only display decision below, which is the open item that matters most in this section.
 
 **Subscription groups matter more here than plan names do.** On Apple, put **PA, Board and Bundle in a single subscription group**. Within a group a user holds exactly one subscription at a time, and Apple handles upgrades, downgrades and crossgrades — including proration — for free. That is precisely the shape we want: Bundle *replaces* the individual plans rather than stacking with them, and someone moving from PA to Bundle is an upgrade Apple manages. Mirror this on Google Play using one subscription with base plans, or parallel products in equivalent arrangement.
 
@@ -92,15 +93,42 @@ A consequence worth stating: **a user cannot hold PA and Board as two separate s
 |---|---|---|---|
 | **PA** | **$4.50** | **$45** | ~17% |
 | **Board** | **$6.50** | **$60** | ~23% |
-| **Bundle** (both products) | **$11** | **$95** | ~28% |
+| **Bundle** (both products) | **$10.50** | **$95** | ~25% |
+
+All figures are **USD** — see *Currency* below, which is where this gets complicated.
 
 **Annual ships alongside monthly in v1**: six products to configure rather than three, and the upgrade paths between them all need testing.
 
 Two consequences of these numbers, stated here rather than discovered during a pricing review:
 
-**The monthly Bundle is exactly PA + Board** ($4.50 + $6.50 = $11.00). The saving lives in the annual price ($95 against $105 for two annual plans). This is coherent, but it changes what the monthly Bundle can be *sold* on. Because the single subscription group above means nobody can hold PA and Board at once, the comparison a user actually makes is "Board at $6.50, or Bundle at $11" — the second product costs exactly its standalone price, with a genuine discount arriving only if they commit for a year. So **monthly Bundle copy must not claim a saving**; it is sold on getting both products, and the annual price is where "cheaper together" is true. The earlier rule in this section — *the Bundle must cost less than PA + Board separately* — is superseded by that reasoning; it was written before the single-subscription-group decision made buying both separately impossible.
+**The Bundle is cheaper than the two plans combined at both cadences**, satisfying the rule stated above — but by very different margins, and copy should respect that. Monthly: $10.50 against $11.00, a saving of **$0.50 a month**. Annual: $95 against $105, a saving of **$10 a year**, on top of the annual discount already inside each plan ($95 against $126 if you paid monthly for the Bundle all year).
 
-**These figures are targets, not store price points.** Each store picks from its own price ladder: map each figure to the nearest available point in App Store Connect and Play Console, confirm what the console actually offers, and let the stores localize from there (they convert and apply tax per storefront). Don't assume $4.50 exists verbatim in both ladders, and don't design any layout around a specific string — see `design-ux-localization-spec.md` section 5a on rendering the store's own formatted price.
+The honest framing: the monthly Bundle's saving is real but small, so "get both" is the reason to buy it and "save money" is not. The annual Bundle is the plan where a price argument can actually be made — $95 against $126 is the number worth showing. Note also that the single subscription group above means nobody can hold PA and Board at once, so the comparison most users actually face is "Board at $6.50, or Bundle at $10.50" — $4 more for the assistant, slightly less than the assistant costs on its own.
+
+### Currency — **USD, and this conflicts with the payment rail**
+
+**Decided: prices are defined in USD only.** One set of price objects, one currency, no multi-currency price management on our side. The intent goes further — **every user sees USD regardless of where they are**, with no local-currency presentment and no conversion performed by us.
+
+**The second half of that is not achievable on the payment rail this spec currently commits to.** It needs resolving before any of Sessions 10-11 is built, because it decides what gets built.
+
+Native in-app purchase (section 1, decided) hands price *presentment* to Apple and Google. You set a base price; the stores generate equalized local prices across their storefronts; every buyer is shown **their own currency, tax-inclusive**, because the store is merchant of record (section 7). There is no store setting for "show USD to everyone" — a buyer in London sees pounds, one in Tel Aviv sees shekels. `design-ux-localization-spec.md` section 5a's instruction to render the store's formatted price string as given is a consequence of that, not a stylistic preference.
+
+USD-to-everyone *is* straightforward on a card processor: Stripe price objects defined in USD, every customer charged in USD, and the buyer's card issuer handles any conversion. **The reference to Stripe price objects alongside this decision points at the same rail** — and it is worth saying plainly that Stripe was the approach this spec deliberately moved away from (section 2), for reasons that have not changed: store policy generally requires IAP for digital subscriptions that unlock in-app functionality, and selling around it risks rejection.
+
+| | Prices defined in USD | Every user *sees* USD | Store-policy safe |
+|---|---|---|---|
+| **Stripe / web checkout** | Yes | Yes | Risk of rejection for in-app unlocks |
+| **Native IAP** (current decision) | Yes, as the base price | **No** — always local currency | Yes |
+
+**So there are three coherent positions, and one of them has to be chosen:**
+
+1. **Keep IAP, accept localized display.** The prices above stay exactly as decided and are set as the USD base; buyers see the equalized local equivalent. Everything else in this spec stands. This is the smallest change — only the "displayed as USD to every user" half is dropped.
+2. **Move back to Stripe / web checkout to get USD-only display.** Then sections 1, 2, 5, 7 and 8 are substantially wrong and need rewriting: commission economics, the whole RevenueCat integration, merchant-of-record and VAT handling, and the native-build testing requirement all change. It also reopens the store-policy risk.
+3. **Both rails**, IAP in-app and Stripe on the web. Two billing integrations, two sources of entitlement truth, and the reconciliation between them — the most expensive option by a wide margin, and not a v1 shape.
+
+**What is settled regardless of which is chosen:** the three plans, the six prices above, and that USD is the single currency the business defines its prices in. Only presentment is in question.
+
+**Under IAP, the figures are targets rather than store price points.** Each store picks from its own price ladder: map each figure to the nearest available point in App Store Connect and Play Console, confirm what the console actually offers, and let the stores localize from there. Don't assume $4.50 exists verbatim in both ladders, and don't design any layout around a specific string — see `design-ux-localization-spec.md` section 5a. Under Stripe the figures are exact and this caveat disappears.
 
 **Introductory offers** — free trials, intro pricing — are first-class on both stores and configured there rather than in our code. That makes the "trial or no trial" question cheaper to answer than it would have been with a processor (section 9).
 
@@ -164,7 +192,7 @@ It carries, in this order:
 3. **The price**, from the store, for the smallest plan that unlocks it. For a Board subscriber that is the Bundle upgrade; for a free user it is whichever of PA or Bundle fits what they are doing. State the billing period and that it renews — the store-mandated disclosures in `design-ux-localization-spec.md` section 5a apply to this card exactly as they do to the plan screen, because it is a purchase surface.
 4. **Upgrade**, and a real **Not now** beside it with real contrast.
 
-**Tone is the PA's, first person, warm and brief.** English: *"I could send Dana that reminder for you — she hasn't booked since her last session. Your assistant is $4.50 a month, or $11 with the Board."* Hebrew: *"אני יכול לשלוח לדנה את התזכורת במקומך — היא לא קבעה תור מאז הפגישה האחרונה."* Never urgency, never a countdown, never a scarcity claim.
+**Tone is the PA's, first person, warm and brief.** English: *"I could send Dana that reminder for you — she hasn't booked since her last session. Your assistant is $4.50 a month, or $10.50 with the Board."* Hebrew: *"אני יכול לשלוח לדנה את התזכורת במקומך — היא לא קבעה תור מאז הפגישה האחרונה."* Never urgency, never a countdown, never a scarcity claim.
 
 ### Rules that keep it from becoming a nag
 
@@ -232,7 +260,8 @@ Worth standing this up early — a store account that isn't ready, or a dev buil
 ## 9. Open decisions
 
 - ~~**Exact prices** per plan, and whether **annual** ships in v1~~ — **decided**, section 4. What remains is mechanical: mapping each figure to the nearest store price point in both consoles.
-- **Which storefront anchors the prices.** The figures in section 4 are in USD while the business is UK-based (section 7). Setting the US price and letting the stores convert gives a GBP price nobody chose; setting the GBP price and letting them convert gives a USD price nobody chose. Pick the anchor deliberately, and sanity-check what the other major storefronts land on.
+- ~~**Which storefront anchors the prices**~~ — **decided**: USD, section 4.
+- **Which payment rail, given the USD-only display decision.** The live one. Section 4's *Currency* subsection lays out the three positions; option 1 (keep IAP, accept localized display) leaves this spec intact, option 2 (Stripe) invalidates large parts of sections 1, 2, 5, 7 and 8. Nothing in Sessions 10-11 should be built until this is settled, because it determines what there is to build.
 - **Does buying Board withdraw the PA free tier?** Section 4a assumes not — the section 3 free tier holds for everyone, and the PA tab is a working sample rather than a locked door. The alternative (Board subscribers get a fully paywalled PA tab) is a real option, but it contradicts section 3 as approved and would need re-approving there.
 - **How long "Not now" lasts** on a contextual upsell (section 4a) before the full card is worth showing again, and whether a different trigger type resets it.
 - **Trial or intro offer?** Now cheap to configure on both stores. A free trial converts better than a limited free tier for some products and cannibalises it for others — and we have both, so the interaction needs deciding rather than defaulting.
@@ -240,4 +269,4 @@ Worth standing this up early — a store account that isn't ready, or a dev buil
 - **Family Sharing** (Apple) — supported per-product; decide whether a Bundle should be shareable.
 - **What happens to a Bundle subscriber who downgrades to one product** while holding data in the other — read-only per section 3, presumably, but worth confirming.
 - **Per-seat or per-account?** Assumed per-account for v1; a therapist with an assistant is a plausible near-term exception, and IAP makes multi-seat harder than a processor would.
-- **Whether a web/Stripe path is ever wanted** for desktop signup or for markets where store economics are poor. Not v1; the `store` column in section 6 keeps the door open.
+- **Whether a web/Stripe path is ever wanted** for desktop signup or for markets where store economics are poor. Previously "not v1"; the USD-only display decision has made it a live question rather than a future one — see section 4's *Currency* subsection. The `store` column in section 6 keeps the door open either way.

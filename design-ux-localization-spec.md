@@ -97,6 +97,8 @@ Because prices arrive from the store already localized and tax-inclusive, most o
 
 ### Localizing money
 
+> **Pending decision, read first.** `payments-spec.md` section 4 records a decision that prices are USD-only and shown as USD to every user regardless of location. Everything in this subsection describes the opposite behaviour, because it follows from in-app purchase, where the store always presents local currency and we render what it hands back. One of the two has to give: if the USD-only display holds, the product is not selling through IAP, and this subsection plus the store-requirements list above are rewritten along with it. Until that is settled, what follows is what applies.
+
 Going through the stores removes most of this problem — what's left is display, not calculation:
 
 - **Use the store's formatted price string as given.** RevenueCat exposes each price already formatted for the storefront (symbol, separators, placement). Re-formatting it yourself, with `Intl.NumberFormat` or otherwise, can only make it wrong.
