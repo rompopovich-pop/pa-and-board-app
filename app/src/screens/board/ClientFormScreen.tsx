@@ -3,7 +3,7 @@ import { ActivityIndicator, Switch, Text, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../theme";
-import { Button, Chip, ScreenContainer, TextField } from "../../components";
+import { Button, Chip, DateField, ScreenContainer, TextField } from "../../components";
 import {
   createClient,
   extractFieldKey,
@@ -115,7 +115,7 @@ export function ClientFormScreen() {
   const labelStyle = { color: colors.textSecondary, fontFamily: typography.fontFamilyBodyMedium, fontSize: typography.sizes.sm } as const;
 
   function renderField(field: BoardField) {
-    const label = field.required ? `${field.label} *` : field.label;
+    const label = field.required ? `${field.label} (${t("board.formRequired")})` : field.label;
     const errorMessage = fieldErrors[field.key];
     const current = values[field.key];
 
@@ -132,6 +132,17 @@ export function ClientFormScreen() {
               accessibilityLabel={field.label}
             />
           </View>
+        );
+      case "date":
+        return (
+          <DateField
+            key={field.key}
+            label={label}
+            value={typeof current === "string" ? current : ""}
+            onChange={(iso) => setValue(field.key, iso)}
+            errorMessage={errorMessage}
+            disabled={saving}
+          />
         );
       case "select":
         return (
@@ -160,7 +171,6 @@ export function ClientFormScreen() {
             value={typeof current === "string" ? current : ""}
             onChangeText={(text) => setValue(field.key, text)}
             errorMessage={errorMessage}
-            placeholder={field.type === "date" ? t("board.formDateHint") : undefined}
             keyboardType={
               field.type === "number"
                 ? "decimal-pad"

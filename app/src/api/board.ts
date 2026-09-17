@@ -13,6 +13,8 @@ export interface BoardField {
   type: BoardFieldType;
   options: string[];
   required: boolean;
+  /** One plain clause on why this field is on the board, in the board's language. */
+  hint: string | null;
   /** `name` and `general_info` - present on every board, rendered specially. */
   isSystem: boolean;
 }
@@ -34,6 +36,8 @@ export interface Board {
   name: string;
   clientNoun: string;
   clientNounPlural: string;
+  /** What this business calls one appointment/job ("lesson", "groom"). */
+  sessionNoun: string | null;
   statuses: BoardStatus[];
   followUpRule: FollowUpRule | null;
   summary: string;

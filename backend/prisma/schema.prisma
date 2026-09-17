@@ -220,6 +220,11 @@ model Board {
   name             String
   clientNoun       String   @map("client_noun")
   clientNounPlural String   @map("client_noun_plural")
+  // What this business calls one appointment/visit/job ("lesson", "groom",
+  // "callout", "session"), in the owner's language. The history log's button
+  // says "Log a lesson" rather than a generic "Log session" - a dog groomer
+  // doesn't hold sessions. Nullable for boards generated before this existed.
+  sessionNoun      String?  @map("session_noun")
   statuses         Json
   followUpRule     Json     @map("follow_up_rule")
   // The engine's short explanation of what it built and why - shown once
@@ -264,6 +269,10 @@ model BoardField {
   // Choices for `select` fields; empty for every other type.
   options   String[]
   required  Boolean        @default(false)
+  // One short clause on why this field is on the board, in the owner's
+  // language - shown under the field on the "about this board" screen so a
+  // non-technical owner reads a reason rather than a data type.
+  hint      String?
   isSystem  Boolean        @default(false) @map("is_system")
   position  Int
   createdAt DateTime       @default(now()) @map("created_at")

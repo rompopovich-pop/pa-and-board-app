@@ -207,7 +207,12 @@ issue early is much cheaper than retrofitting it later (see `build-sequence.md`)
   assumptions it made. Labels come back in the description's language
   (Hebrew in, Hebrew board out). Post-processing guarantees the two fields
   every board has — `name` and the free-text `general_info` — and stable
-  ASCII keys.
+  ASCII keys. The engine also names one unit of work ("session", "lesson",
+  "groom", "callout") so the record says "Log a groom" rather than a
+  generic "Log session", and writes a one-clause reason for each field
+  that the "about this board" screen shows instead of data types.
+  Only `name` is ever required: a board that refuses to save a client over
+  a missing phone number costs the owner the capture they were making.
 - **Data layer** (`backend/prisma/schema.prisma`): `businesses`, `boards`
   (statuses + follow-up rule as JSON), `board_fields`, `clients` (values as
   JSONB keyed by field key, `name` mirrored to a column for search/sort),
@@ -218,13 +223,26 @@ issue early is much cheaper than retrofitting it later (see `build-sequence.md`)
 - **App** (`app/src/screens/board/`): setup (one text box → the generated
   board explained in plain words), the client list with colour-coded status
   chips, search and status filter, add/edit forms generated from the board's
-  fields, and the client record (status, details, general info, and the
-  history log where notes and sessions are logged). Follow-up flags are
-  Phase 2: the rule is stored but nothing evaluates it yet.
-- Tested against a therapist, a personal trainer, a Hebrew-speaking
-  hairdresser, and a vague "I run a small business" — the last gets a
-  generic starter board plus a stated list of assumptions rather than a
-  clarifying question.
+  fields, and the client record (status, details, notes, and the history log
+  where notes and sessions are logged). Follow-up flags are Phase 2: the
+  rule is stored but nothing evaluates it yet.
+- **Two free-text places, not three.** The guaranteed `general_info` field
+  is the client's notes area — what stays true about the person, editable
+  in place from the record. The history log is for what happened on a day.
+  A separate "notes" field alongside those would only make owners guess
+  which box to type in.
+- **Dates use the platform's own picker** (`app/src/components/DateField.tsx`
+  over `@react-native-community/datetimepicker`): Android's calendar
+  dialog, iOS's wheel in a sheet, the browser's date control on web. Nobody
+  types a date format; values are shown back as "18 Sept 2026".
+- **Phone numbers are actionable** wherever they appear on a record — one
+  tap to call, one to open a WhatsApp chat (`app/src/utils/phone.ts`
+  expands a locally-written number using the device's country).
+- Tested against nine business descriptions: therapist, personal trainer,
+  Hebrew-speaking hairdresser, vague "I run a small business", callout
+  handyman/cleaner, freelance tutor, project-based consultant, dog groomer
+  and driving instructor. The vague one gets a generic starter board plus a
+  stated list of assumptions rather than a clarifying question.
 
 ## What's next
 

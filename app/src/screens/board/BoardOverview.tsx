@@ -52,16 +52,13 @@ export function BoardOverview({ board, showDescription = false }: BoardOverviewP
 
       <Card style={{ gap: spacing.sm }}>
         <Text style={heading}>{t("board.overviewFields", { noun: board.clientNoun })}</Text>
+        {/* What each field is for, in the engine's own words - an owner
+            reading their new board wants a reason, not a data type. */}
         {board.fields.map((field) => (
-          <View key={field.key} style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.sm }}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[{ ...body, fontFamily: typography.fontFamilyBodyMedium }, generated]}>
-                {field.label}
-                {field.required ? " *" : ""}
-              </Text>
-              {field.type === "select" ? <Text style={[secondary, generated]}>{field.options.join(" · ")}</Text> : null}
-            </View>
-            <Text style={{ ...secondary, paddingTop: 2 }}>{t(`board.fieldType.${field.type}`)}</Text>
+          <View key={field.key} style={{ gap: 2 }}>
+            <Text style={[{ ...body, fontFamily: typography.fontFamilyBodyMedium }, generated]}>{field.label}</Text>
+            {field.hint ? <Text style={[secondary, generated]}>{field.hint}</Text> : null}
+            {field.type === "select" ? <Text style={[secondary, generated]}>{field.options.join(" · ")}</Text> : null}
           </View>
         ))}
       </Card>

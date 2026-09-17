@@ -44,6 +44,7 @@ export interface GeneratedBoard {
   boardName: string;
   clientNoun: string;
   clientNounPlural: string;
+  sessionNoun: string;
   fields: GeneratedField[];
   statuses: BoardStatus[];
   followUpRule: FollowUpRule;
@@ -62,14 +63,19 @@ const GeneratedBoardSchema = z.object({
   board_name: z.string().describe("What to call the board, e.g. 'Patients' - in the description's language"),
   client_noun: z.string().describe("What this business calls one client (patient, student, client...), singular, in the description's language"),
   client_noun_plural: z.string().describe("Plural of client_noun"),
+  session_noun: z
+    .string()
+    .describe("What this business calls ONE appointment or piece of work - session, lesson, groom, job, callout, visit, treatment - singular, lowercase, in the description's language"),
   fields: z.array(
     z.object({
       key: z.string().describe("Stable ASCII snake_case identifier in English, e.g. next_appointment"),
       label: z.string().describe("Label shown to the owner, in the description's language"),
       type: z.enum(FIELD_TYPES),
       options: z.array(z.string()).describe("Choices for a select field, in the description's language; [] for every other type"),
-      required: z.boolean(),
-      hint: z.string().nullable().describe("One short clause on why this field is here, or null"),
+      hint: z
+        .string()
+        .nullable()
+        .describe("One short plain-language clause shown to the owner explaining why this field is on their board, in the description's language, or null"),
     }),
   ),
   statuses: z.array(
@@ -103,9 +109,13 @@ Fields:
 - Two fields are mandatory on every board and must use exactly these keys: "name" (type text, required, first) and "general_info" (type long_text, last) - the free-text catch-all for anything the other fields don't cover.
 - Include a phone field (type phone) unless the business clearly never contacts clients directly. Add email only if it matters for this business.
 - 6 to 12 fields in total, including the two mandatory ones. Prefer fewer, sharper fields over an exhaustive form.
+- Every field carries a "hint": one short plain clause, in the owner's language, saying why it earns its place ("So you know before the clippers come out"). The owner reads these, so write them as you would speak to them, not as documentation. Leave it null only when the label is completely self-evident.
 - Types: text for short free text; long_text for a paragraph; number for counts and money (sessions paid for, session number, balance); date for a next appointment, start date, last visit; select for a small closed set of choices (give 2-6 options); checkbox for a plain yes/no; phone and email for contact details.
 - Do NOT add fields for things the record already has on its own: a status column, a chronological history log where the owner logs each session or note (so no "session notes", "history", "last session date", "notes" fields), and created/updated timestamps. Counters like "session number" or "sessions paid for" are still useful fields.
 - "Who I'm seeing today" or similar means a next-appointment date field.
+- The general-info field is the owner's free notes area for this person: anything they want to remember that has no box of its own. Label it accordingly in their language ("General info", "Notes", "מידע כללי").
+
+Session noun: what this owner would call one appointment or one piece of work - "session" for a therapist, "lesson" for a tutor or driving instructor, "groom" for a dog groomer, "job" or "callout" for a handyman, "visit" for a hairdresser, "meeting" for a consultant. The app says "Log a lesson" using this word, so it must read naturally after "Log a".
 
 Statuses: 3 to 6 categories that fit this business, each tagged with a tone: "new" (just arrived / not yet started), "active" (ongoing), "needs_follow_up" (attention needed), "inactive" (finished, paused or lapsed). Include at least one status of tone new, one active, one needs_follow_up and one inactive. Business-specific labels ("In treatment", "Waiting list", "On hold") are better than generic ones when they fit.
 
@@ -122,11 +132,12 @@ export class BoardGenerationError extends Error {
   }
 }
 
-const DEFAULTS: Record<string, { name: string; generalInfo: string; client: [string, string]; statuses: BoardStatus[] }> = {
+const DEFAULTS: Record<string, { name: string; generalInfo: string; client: [string, string]; session: string; statuses: BoardStatus[] }> = {
   en: {
     name: "Name",
     generalInfo: "General info",
     client: ["client", "clients"],
+    session: "visit",
     statuses: [
       { key: "new", label: "New", tone: "new" },
       { key: "active", label: "Active", tone: "active" },
@@ -138,6 +149,7 @@ const DEFAULTS: Record<string, { name: string; generalInfo: string; client: [str
     name: "שם",
     generalInfo: "מידע כללי",
     client: ["לקוח", "לקוחות"],
+    session: "ביקור",
     statuses: [
       { key: "new", label: "חדש", tone: "new" },
       { key: "active", label: "פעיל", tone: "active" },
@@ -203,7 +215,10 @@ export function normalizeGeneratedBoard(raw: RawGeneratedBoard): GeneratedBoard 
       label,
       type,
       options: type === "select" ? options : [],
-      required: key === "name" ? true : key === "general_info" ? false : field.required,
+      // Only the name is ever required. A board that refuses to save a new
+      // client because a phone number is missing costs the owner the capture
+      // they were in a hurry to make - everything else can be filled in later.
+      required: key === "name",
       isSystem,
       hint: field.hint?.trim() || null,
     });
@@ -251,6 +266,7 @@ export function normalizeGeneratedBoard(raw: RawGeneratedBoard): GeneratedBoard 
     boardName: raw.board_name.trim() || defaults.client[1],
     clientNoun: raw.client_noun.trim() || defaults.client[0],
     clientNounPlural: raw.client_noun_plural.trim() || defaults.client[1],
+    sessionNoun: raw.session_noun.trim().toLowerCase() || defaults.session,
     fields: ordered,
     statuses,
     followUpRule: { days, basis: raw.follow_up_rule.basis, description: raw.follow_up_rule.description.trim() },

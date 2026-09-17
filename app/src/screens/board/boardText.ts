@@ -68,9 +68,28 @@ export function formatFieldValue(field: BoardField, value: FieldValue, t: TFunct
   }
 }
 
-/** The fields worth showing on a list row: the first two non-system ones with a value. */
+// What reads well on one truncated line of a list row. A date or a count
+// tells an owner something at a glance; an address or an email address just
+// fills the row and pushes out what they were looking for.
+const HIGHLIGHT_PRIORITY: Record<BoardField["type"], number> = {
+  date: 0,
+  select: 1,
+  number: 2,
+  checkbox: 3,
+  text: 4,
+  phone: 5,
+  email: 6,
+  long_text: 7,
+};
+
+/** The one or two fields worth showing under a name in the list, most
+ * glanceable first - a truncated row should spend its width on the date
+ * before it spends it on a phone number. */
 export function highlightFields(board: Board, fields: Record<string, FieldValue>, limit = 2): BoardField[] {
   return board.fields
     .filter((field) => !field.isSystem && fields[field.key] !== null && fields[field.key] !== "" && fields[field.key] !== false)
-    .slice(0, limit);
+    .map((field, index) => ({ field, index }))
+    .sort((a, b) => HIGHLIGHT_PRIORITY[a.field.type] - HIGHLIGHT_PRIORITY[b.field.type] || a.index - b.index)
+    .slice(0, limit)
+    .map((entry) => entry.field);
 }
